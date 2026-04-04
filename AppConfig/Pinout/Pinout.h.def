@@ -31,7 +31,8 @@ enum PIN_STATE_e {
 /// @brief Check if pin is in extended range (32-63) for GPIO_OUT1_REG
 #define IsExtendedPin(p)    (((p) >= 32) && ((p) < 64))
 
-#define PIN_LED_INDICATOR0 (Pin_t)19
+/// GENERATED SECTION | BEGIN /////////////////////////////////////////////////
+/// GENERATED SECTION | END   /////////////////////////////////////////////////
 
 #ifdef __cplusplus
 }

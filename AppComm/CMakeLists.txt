@@ -1,0 +1,22 @@
+# @brief Collect all source files from subdirectories
+set(srcs
+    "EthernetW550/EthernetW550.c"
+    "HBridge/HBridge.c"
+    "UltraSonic/UltraSonic.c"
+)
+
+# @brief Export include directories so other components can find the headers
+set(include_dirs
+    "."
+    "EthernetW550"
+    "HBridge"
+    "UltraSonic"
+)
+
+# @brief Register the component with ESP-IDF build system
+idf_component_register(
+    SRCS "${srcs}"
+    INCLUDE_DIRS "${include_dirs}"
+    REQUIRES "AppUtils" "AppESPWrap" esp_driver_gpio esp_driver_spi esp_timer driver soc esp_hw_support esp_driver_ledc
+)
+

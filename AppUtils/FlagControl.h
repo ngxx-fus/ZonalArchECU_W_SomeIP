@@ -20,6 +20,9 @@ extern "C" {
 #include <stdarg.h>
 /// Standard atomic operations for thread safety
 #include <stdatomic.h>
+/// Return code
+#include "ReturnType.h"
+
 
 /* --- HELPERS --- */
 
@@ -88,7 +91,7 @@ void SafeFlagToggle(SafeFlag_t *f, uint32_t i);
 /// @param  f Pointer to the SafeFlag_t variable.
 /// @param  i Bit position (0-31).
 /// @return 1 if set, 0 otherwise.
-DefaultRet_t SafeFlagHas(SafeFlag_t *f, uint32_t i);
+ReturnCode_t SafeFlagHas(SafeFlag_t *f, uint32_t i);
 
 #ifdef __cplusplus
 }

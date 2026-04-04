@@ -32,6 +32,8 @@ extern "C" {
 /// Delay task for X milliseconds (Blocking)
 #define DelayMs(ms)             vTaskDelay(MsToTicks(ms))
 
+#define SleepMs(ms)             DelayMs(ms)
+
 /// Yield CPU to other tasks of same priority
 #define TaskYield()             taskYIELD()
 

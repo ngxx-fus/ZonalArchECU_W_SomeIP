@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "ESP32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/fus/esp/tools/**",
+                "/home/fus/esp/components/**"
+            ],
+            "defines": [
+                "ESP32",
+                "IDF_VER=\"6.1.0\""
+            ],
+            "compilerPath": "/home/fus/.espressif/tools/xtensa-esp-elf/esp-15.2.0_20251204/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-arm", 
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
+        }
+    ],
+    "version": 4
+}

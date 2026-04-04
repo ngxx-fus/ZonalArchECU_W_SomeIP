@@ -12,7 +12,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "DevicePinout.h"
+#include "Pinout/Pinout.h"
 #include "SystemLog.h"
 
 #ifdef __cplusplus

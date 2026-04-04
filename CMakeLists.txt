@@ -7,8 +7,9 @@ set(
     "AppESPWrap"
     "AppUtils"
     "AppConfig"
+    "AppComm"
 )
 
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-project(xFindMyMoto)
+project(ZonalArchECU_W_SomeIP)
