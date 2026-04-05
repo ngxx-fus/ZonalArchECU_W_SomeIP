@@ -15,10 +15,12 @@ extern "C" {
 #include <rom/ets_sys.h>
 #include <esp_random.h>
 #include <esp_heap_caps.h>
+#include <driver/ledc.h>
 
 /// This help the lib more readable!
 /// #include "../AppConfig/All.h"
 
+#include "sdkconfig.h"
 #include "./ESPGPIOWrapper.h"
 #include "./ESPLogWrapper.h"
 #include "./ESPFreeRTOSWrapper.h"

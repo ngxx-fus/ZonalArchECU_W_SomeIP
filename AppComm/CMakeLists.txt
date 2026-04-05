@@ -1,15 +1,18 @@
 # @brief Collect all source files from subdirectories
 set(srcs
     "EthernetW550/EthernetW550.c"
-    "HBridge/HBridge.c"
     "UltraSonic/UltraSonic.c"
+    "HBridge/Module.c"
+    "HBridge/HBridge.c"
+    "Dummy/Dummy.c"
 )
 
 # @brief Export include directories so other components can find the headers
 set(include_dirs
     "."
-    "EthernetW550"
+    "Dummy"
     "HBridge"
+    "EthernetW550"
     "UltraSonic"
 )
 
