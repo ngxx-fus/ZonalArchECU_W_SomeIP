@@ -1,6 +1,7 @@
 # @brief Collect all source files from subdirectories
 set(srcs
-    "EthernetW550/EthernetW550.c"
+    "EthernetW5500/EthernetW5500.c"
+    "EthernetW5500/Module.c"
     "UltraSonic/UltraSonic.c"
     "HBridge/Module.c"
     "HBridge/HBridge.c"
@@ -12,7 +13,7 @@ set(include_dirs
     "."
     "Dummy"
     "HBridge"
-    "EthernetW550"
+    "EthernetW5500"
     "UltraSonic"
 )
 
@@ -20,6 +21,16 @@ set(include_dirs
 idf_component_register(
     SRCS "${srcs}"
     INCLUDE_DIRS "${include_dirs}"
-    REQUIRES "AppUtils" "AppESPWrap" esp_driver_gpio esp_driver_spi esp_timer driver soc esp_hw_support esp_driver_ledc
+    REQUIRES 
+        "AppUtils" 
+        "AppESPWrap" 
+        esp_driver_gpio 
+        esp_driver_spi 
+        esp_timer 
+        driver 
+        soc 
+        esp_hw_support 
+        esp_driver_ledc
+        esp_hal_gpspi
 )
 

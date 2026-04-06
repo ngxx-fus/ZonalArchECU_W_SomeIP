@@ -7,4 +7,6 @@ void Dummy0(void * arg);
 void Dummy1(void * arg);
 void Dummy_Jitter(void * arg);
 
+void Dummy3(void * arg);
+
 #endif /// __Dummy_H__

@@ -68,3 +68,22 @@ void Dummy_Jitter(void * arg) {
         vTaskDelay(pdMS_TO_TICKS(1732));
     }
 }
+
+
+void Dummy3(void * arg){
+    SysEntry("Dummy3");
+    
+    SysLog("[Random] Starting slow random jitter loop...");
+    while (1) {
+        /* Generate random speeds for both channels within 10-bit range */
+        int s0 = (rand() % 2047) - 1023;
+        int s1 = (rand() % 2047) - 1023;
+
+        /* Apply chaos to both motors and log values */
+        MotorSetSpeed0(s0);
+        MotorSetSpeed1(s1);
+        SysLog("[Random] Applied - S0: %d, S1: %d", s0, s1);
+
+        vTaskDelay(pdMS_TO_TICKS(1732));
+    }
+}
