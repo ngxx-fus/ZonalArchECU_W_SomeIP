@@ -21,11 +21,7 @@ void EthernetAdapterCtl(void* arg){
         return;
     }
 
-    memset(&EthHeader, 0, sizeof(EthHeader));
-    EthHeader.AddrPhase = eW5500_VersionReg;
-    EthHeader.nRW       = eW5500_Read;
-    EthHeader.BlockSel  = 0;
-    EthHeader.OpMode    = 2;
+
     
     SysLog("[AppService_HBridge] Join forever loop...");
     while (1) {
@@ -33,8 +29,10 @@ void EthernetAdapterCtl(void* arg){
         Data = 0;
         Data0 = 0x17;
         Data1 = 0;
-        W5500_LoopbackTest(Eth, (uint8_t*)&Data0, (uint8_t*)&Data1);
-        SysLog("[EthernetAdapterCtl] Loopback test [%X], [%X]", Data0, Data1);
+        /// W5500_LoopbackTest(Eth, (uint8_t*)&Data0, (uint8_t*)&Data1);
+        W5500_SetHeader(Eth, eW5500_CommonRegister + eW5500_VersionReg, 0, eW5500_Read, eW5500_FDM1);
+        Data = W5500_ReadByte(Eth);
+        SysLog("[EthernetAdapterCtl] Get version %X", Data);
 
         // SysLog("[EthernetAdapterCtl] SPI Send header = {%02X%02X %02X}", 
         //     ((uint8_t*)&EthHeader)[2],
@@ -47,7 +45,7 @@ void EthernetAdapterCtl(void* arg){
         // W5500_ReceiveData(Eth, EthHeader, (void *)&Data, 2);
         // SysLog("[EthernetAdapterCtl] Result = %X", Data & 0xFFFFFFFFFF);
 
-        vTaskDelay(pdMS_TO_TICKS(20000));
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 

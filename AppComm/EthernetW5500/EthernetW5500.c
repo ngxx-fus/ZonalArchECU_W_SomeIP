@@ -165,6 +165,179 @@ ReturnCode_t W5500_ReceiveData(EthernetW5500_t* Ptr, W5500Header_t Header, void*
     return STAT_OKE;
 }
 
+/* NEW FUNCTION **********************************************************************************************************/
+
+ReturnCode_t W5500_SetHeader(EthernetW5500_t* Ptr, uint16_t RegAddr, uint8_t BlockSelBits, uint8_t nRW, uint8_t OpMode){
+    if (IsNull(Ptr)) return STAT_ERR_NULL;
+    Ptr->TxFrame.Header.AddrPhase   = RegAddr;
+    Ptr->TxFrame.Header.BlockSel    = BlockSelBits  & 0x1F;
+    Ptr->TxFrame.Header.nRW         = nRW           & 0x01;
+    Ptr->TxFrame.Header.OpMode      = OpMode        & 0x03;
+    return STAT_OKE;
+}
+
+ReturnCode_t W5500_SetTxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N){
+    if (IsNull(Ptr) || IsNull(Payload)) return STAT_ERR_NULL;
+    /*Adjust for size*/
+    N = (N < 0) ? 0 : (N > 1500) ? 1500 : N;
+    /*Perform transfer*/
+    memcpy(Ptr->TxFrame.Payload.Byte, Payload, N);
+    return STAT_OKE;
+}
+
+ReturnCode_t W5500_GetTxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N){
+    if (IsNull(Ptr) || IsNull(Payload)) return STAT_ERR_NULL;
+    /*Adjust for size*/
+    N = (N < 0) ? 0 : (N > 1500) ? 1500 : N;
+    /*Perform transfer*/
+    memcpy(Payload, Ptr->TxFrame.Payload.Byte, N);
+    return STAT_OKE;
+}
+
+ReturnCode_t W5500_SetRxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N){
+    if (IsNull(Ptr) || IsNull(Payload)) return STAT_ERR_NULL;
+    /*Adjust for size*/
+    N = (N < 0) ? 0 : (N > 1500) ? 1500 : N;
+    /*Perform transfer*/
+    memcpy(Ptr->RxFrame.Payload.Byte, Payload, N);
+    return STAT_OKE;
+}
+
+ReturnCode_t W5500_GetRxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N){
+    if (IsNull(Ptr) || IsNull(Payload)) return STAT_ERR_NULL;
+    /*Adjust for size*/
+    N = (N < 0) ? 0 : (N > 1500) ? 1500 : N;
+    /*Perform transfer*/
+    memcpy(Payload, Ptr->RxFrame.Payload.Byte, N);
+    return STAT_OKE;
+}
+
+ReturnCode_t W5500_AccessNByte(EthernetW5500_t* Ptr, uint8_t nRW) {
+    int32_t N;
+    if (IsNull(Ptr)) return STAT_ERR_NULL;
+
+    /* Determine transaction length based on the operation type */
+    switch (nRW) {
+        case eW5500_Read:
+            Ptr->TxFrame.Header.nRW = eW5500_Read;
+            N = Ptr->RxFrame.Payload.Length;
+            break;
+        case eW5500_Write:
+            Ptr->TxFrame.Header.nRW = eW5500_Write;
+            N = Ptr->TxFrame.Payload.Length;
+            break;
+        default:
+            return STAT_ERR_INVALID_ARG;
+    }
+
+    /* Validate and clamp N based on the operational mode */
+    switch (Ptr->TxFrame.Header.OpMode) {
+        case eW5500_VDM:  N = (N < 1) ? 1 : (N > 1500) ? 1500 : N; break;
+        case eW5500_FDM1: N = 1; break;
+        case eW5500_FDM2: N = 2; break;
+        case eW5500_FDM4: N = 4; break;
+    }
+
+    /* Synchronize frame lengths and prepare buffers */
+    Ptr->TxFrame.Payload.Length = N;
+    Ptr->RxFrame.Payload.Length = N;
+    memset(Ptr->RxFrame.Byte, 0, 3 + N);
+    
+    /* Only clear TX payload if we are in READ mode to avoid sending garbage */
+    if (nRW == eW5500_Read) {
+        memset(Ptr->TxFrame.Payload.Byte, 0, N);
+    }
+
+    /* Execute the SPI transaction with manual CS control */
+    spi_transaction_t t = {
+        .length = 8 * (N + 3),
+        .tx_buffer = Ptr->TxFrame.Byte,
+        .rx_buffer = Ptr->RxFrame.Byte
+    };
+
+    gpio_set_level(Ptr->Pinout.SCS, 0);
+    spi_device_polling_transmit(w5500_spi_handle, &t); 
+    gpio_set_level(Ptr->Pinout.SCS, 1);
+
+    return STAT_OKE;
+}
+
+ReturnCode_t W5500_ReadByte(EthernetW5500_t* Ptr) {
+    if (IsNull(Ptr)) return STAT_ERR_NULL;
+
+    /* Override operational mode for single byte access */
+    Ptr->TxFrame.Header.OpMode = eW5500_FDM1;
+    Ptr->RxFrame.Payload.Length = 1;
+    
+    /* Execute transaction and return the first byte */
+    if (W5500_AccessNByte(Ptr, eW5500_Read) != STAT_OKE) return 0;
+    return (ReturnCode_t)Ptr->RxFrame.Payload.Byte[0];
+}
+
+ReturnCode_t W5500_ReadDoubleByte(EthernetW5500_t* Ptr) {
+    if (IsNull(Ptr)) return STAT_ERR_NULL;
+
+    /* Set mode to 2-byte fixed data length */
+    Ptr->TxFrame.Header.OpMode = eW5500_FDM2;
+    Ptr->RxFrame.Payload.Length = 2;
+    
+    /* Execute transaction and assemble 16-bit result */
+    if (W5500_AccessNByte(Ptr, eW5500_Read) != STAT_OKE) return 0;
+    return (ReturnCode_t)((Ptr->RxFrame.Payload.Byte[0] << 8) | Ptr->RxFrame.Payload.Byte[1]);
+}
+
+ReturnCode_t W5500_ReadQuartByte(EthernetW5500_t* Ptr) {
+    if (IsNull(Ptr)) return STAT_ERR_NULL;
+
+    /* Set mode to 4-byte fixed data length */
+    Ptr->TxFrame.Header.OpMode = eW5500_FDM4;
+    Ptr->RxFrame.Payload.Length = 4;
+    
+    /* Execute transaction and assemble 32-bit result */
+    if (W5500_AccessNByte(Ptr, eW5500_Read) != STAT_OKE) return 0;
+    return (ReturnCode_t)((Ptr->RxFrame.Payload.Byte[0] << 24) | (Ptr->RxFrame.Payload.Byte[1] << 16) | 
+                          (Ptr->RxFrame.Payload.Byte[2] << 8)  |  Ptr->RxFrame.Payload.Byte[3]);
+}
+
+ReturnCode_t W5500_WriteByte(EthernetW5500_t* Ptr, uint8_t Data) {
+    if (IsNull(Ptr)) return STAT_ERR_NULL;
+
+    /* Place the actual comment here */
+    Ptr->TxFrame.Header.OpMode = eW5500_FDM1;
+    Ptr->TxFrame.Payload.Byte[0] = Data;
+    Ptr->TxFrame.Payload.Length = 1;
+    
+    return W5500_AccessNByte(Ptr, eW5500_Write);
+}
+
+ReturnCode_t W5500_WriteDoubleByte(EthernetW5500_t* Ptr, uint16_t Data) {
+    if (IsNull(Ptr)) return STAT_ERR_NULL;
+
+    /* Store data in Big-Endian format before transmission */
+    Ptr->TxFrame.Header.OpMode = eW5500_FDM2;
+    Ptr->TxFrame.Payload.Byte[0] = (uint8_t)(Data >> 8);
+    Ptr->TxFrame.Payload.Byte[1] = (uint8_t)(Data & 0xFF);
+    Ptr->TxFrame.Payload.Length = 2;
+    
+    return W5500_AccessNByte(Ptr, eW5500_Write);
+}
+
+ReturnCode_t W5500_WriteQuartByte(EthernetW5500_t* Ptr, uint32_t Data) {
+    if (IsNull(Ptr)) return STAT_ERR_NULL;
+
+    /* Store 32-bit data in Big-Endian format */
+    Ptr->TxFrame.Header.OpMode = eW5500_FDM4;
+    Ptr->TxFrame.Payload.Byte[0] = (uint8_t)(Data >> 24);
+    Ptr->TxFrame.Payload.Byte[1] = (uint8_t)(Data >> 16);
+    Ptr->TxFrame.Payload.Byte[2] = (uint8_t)(Data >> 8);
+    Ptr->TxFrame.Payload.Byte[3] = (uint8_t)(Data & 0xFF);
+    Ptr->TxFrame.Payload.Length = 4;
+    
+    return W5500_AccessNByte(Ptr, eW5500_Write);
+}
+
+/* TEST ******************************************************************************************************************/
+
 /// @brief Perform a true 5-byte loopback test (Header + Data)
 /// @param tx_data Pointer to 2 bytes of test data
 /// @param rx_full_frame Pointer to a 5-byte buffer to store the result
@@ -201,6 +374,8 @@ ReturnCode_t W5500_LoopbackTest(EthernetW5500_t* Ptr, uint8_t tx_data[2], uint8_
 
     return STAT_OKE;
 }
+
+/* UTILS *****************************************************************************************************************/
 
 /// @brief Convert a 4-byte array to an IPv4 string
 /// @param IPv4Addr Input array of 4 bytes
@@ -330,3 +505,4 @@ ReturnCode_t ConvertUInt32ToIPv4Address(uint32_t IPv4Addr, char IPv4Str[]) {
     return STAT_OKE;
 }
 
+/* EOF *******************************************************************************************************************/

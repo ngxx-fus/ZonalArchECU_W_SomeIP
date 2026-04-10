@@ -13,46 +13,53 @@
 
 /// @brief W5500 SPI Frame Header (Address + Control)
 /// @note Packed to ensure 3-byte size for SPI transmission
-typedef struct __attribute__((packed)) W5500Header_t {
-    /* Control Phase: 1 Control Byte */
-    union {
-        uint8_t ControlPhase;
-        struct {
-            uint8_t OpMode   : 2; /* Bits 0-1: Operating Mode */
-            uint8_t nRW      : 1; /* Bit 2: Read/Write (0:Read, 1:Write) */
-            uint8_t BlockSel : 5; /* Bits 3-7: Socket/Register Block Select */
+typedef union W5500Header_t {
+    struct __attribute__((packed))  {
+        /* Control Phase: 1 Control Byte */
+        union {
+            uint8_t ControlPhase;
+            struct {
+                uint8_t OpMode   : 2; /* Bits 0-1: Operating Mode */
+                uint8_t nRW      : 1; /* Bit 2: Read/Write (0:Read, 1:Write) */
+                uint8_t BlockSel : 5; /* Bits 3-7: Socket/Register Block Select */
+            };
+        };
+    
+        /* Address Phase: 16 bits Offset Address */
+        union {
+            uint16_t AddrPhase;
+            struct {
+                uint8_t AddrH; /* MSB: Sent first */
+                uint8_t AddrL; /* LSB: Sent second */
+            };
         };
     };
-
-    /* Address Phase: 16 bits Offset Address */
-    union {
-        uint16_t AddrPhase;
-        struct {
-            uint8_t AddrH; /* MSB: Sent first */
-            uint8_t AddrL; /* LSB: Sent second */
-        };
-    };
+    uint8_t Byte[3];
 } W5500Header_t;
 
 /// @brief Full Frame including data pointer
-typedef union __attribute__((packed)) W5500Transaction_t {
-    struct {
+typedef union W5500Transaction_t {
+    struct  __attribute__((packed)) {
         W5500Header_t   Header;
-        uint8_t         Data[1500];
-        uint16_t        PayloadLength;
+        struct  __attribute__((packed))   {
+            uint8_t         Byte[1500];
+            uint16_t        Length;
+        } Payload;
     };
     uint8_t Byte[sizeof(
-        struct {
+        struct  __attribute__((packed)) {
             W5500Header_t   Header;
-            uint8_t         Data[1500];
-            uint16_t        PayloadLength;
+            struct  __attribute__((packed))  {
+                uint8_t         Byte[1500];
+                uint16_t        Length;
+            } Payload;
         }
     ) - 2 /*Remove 2 bytes from `Length`*/];
 } W5500Transaction_t;
 
 /// @brief Comprehensive W5500 Management Structure
 /// @note Packed union allows raw byte access (bypass) for serialization or debugging
-typedef union __attribute__((packed)) {
+typedef union __attribute__((packed)) EthernetW5500_t {
     struct {
         /* Hardware Pinout Mapping */
         struct {
@@ -143,7 +150,81 @@ ReturnCode_t    W5500_ReceiveData(EthernetW5500_t* Ptr, W5500Header_t Header, vo
 
 /*Test*/
 
-ReturnCode_t W5500_LoopbackTest(EthernetW5500_t* Ptr, uint8_t tx_data[2], uint8_t rx_full_frame[5]);
+/// @brief Pre-configures the SPI frame header in the transmission buffer
+/// @param Ptr Pointer to the W5500 management structure
+/// @param RegAddr 16-bit offset address of the target register
+/// @param BlockSelBits 5-bit block selection (Socket or Common registers)
+/// @param nRW Read/Write command (0 for Read, 1 for Write)
+/// @param OpMode 2-bit operating mode (VDM or FDM)
+/// @return STAT_OKE on success, STAT_ERR_NULL if Ptr is invalid
+ReturnCode_t W5500_SetHeader(EthernetW5500_t* Ptr, uint16_t RegAddr, uint8_t BlockSelBits, uint8_t nRW, uint8_t OpMode);
+
+/// @brief Copies data from an external buffer into the TX frame payload
+/// @param Ptr Pointer to the W5500 management structure
+/// @param Payload Pointer to the source data buffer
+/// @param N Number of bytes to copy (clamped to 1500)
+/// @return STAT_OKE on success
+ReturnCode_t W5500_SetTxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N);
+
+/// @brief Retrieves data from the TX frame payload into an external buffer
+/// @param Ptr Pointer to the W5500 management structure
+/// @param Payload Pointer to the destination buffer
+/// @param N Number of bytes to copy
+/// @return STAT_OKE on success
+ReturnCode_t W5500_GetTxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N);
+
+/// @brief Manually sets data into the RX frame payload buffer
+/// @param Ptr Pointer to the W5500 management structure
+/// @param Payload Pointer to the source data buffer
+/// @param N Number of bytes to copy
+/// @return STAT_OKE on success
+ReturnCode_t W5500_SetRxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N);
+
+/// @brief Retrieves received data from the RX frame payload into an external buffer
+/// @param Ptr Pointer to the W5500 management structure
+/// @param Payload Pointer to the destination buffer
+/// @param N Number of bytes to copy
+/// @return STAT_OKE on success
+ReturnCode_t W5500_GetRxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N);
+
+/// @brief Executes a complete SPI transaction based on pre-configured frames
+/// @param Ptr Pointer to the W5500 management structure
+/// @param nRW Operation mode for the current transaction
+/// @return STAT_OKE on success, error code otherwise
+ReturnCode_t W5500_AccessNByte(EthernetW5500_t* Ptr, uint8_t nRW);
+
+/// @brief Reads a single byte from a pre-configured register
+/// @param Ptr Pointer to the W5500 management structure
+/// @return Received byte value (8-bit)
+ReturnCode_t W5500_ReadByte(EthernetW5500_t* Ptr);
+
+/// @brief Reads two bytes from a pre-configured register
+/// @param Ptr Pointer to the W5500 management structure
+/// @return 16-bit combined value (Big-Endian)
+ReturnCode_t W5500_ReadDoubleByte(EthernetW5500_t* Ptr);
+
+/// @brief Reads four bytes from a pre-configured register
+/// @param Ptr Pointer to the W5500 management structure
+/// @return 32-bit combined value (Big-Endian)
+ReturnCode_t W5500_ReadQuartByte(EthernetW5500_t* Ptr);
+
+/// @brief Writes a single byte to a pre-configured register
+/// @param Ptr Pointer to the W5500 management structure
+/// @param Data 8-bit value to transmit
+/// @return STAT_OKE on success
+ReturnCode_t W5500_WriteByte(EthernetW5500_t* Ptr, uint8_t Data);
+
+/// @brief Writes two bytes to a pre-configured register
+/// @param Ptr Pointer to the W5500 management structure
+/// @param Data 16-bit value to transmit (will be converted to Big-Endian)
+/// @return STAT_OKE on success
+ReturnCode_t W5500_WriteDoubleByte(EthernetW5500_t* Ptr, uint16_t Data);
+
+/// @brief Writes four bytes to a pre-configured register
+/// @param Ptr Pointer to the W5500 management structure
+/// @param Data 32-bit value to transmit (will be converted to Big-Endian)
+/// @return STAT_OKE on success
+ReturnCode_t W5500_WriteQuartByte(EthernetW5500_t* Ptr, uint32_t Data);
 
 /*Public utils*/
 
