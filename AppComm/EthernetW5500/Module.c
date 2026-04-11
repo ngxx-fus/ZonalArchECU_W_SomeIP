@@ -21,7 +21,7 @@ void EthernetAdapterCtl(void* arg){
     }
 
     SysLog("EthernetAdapterCtl(...): Set ComReg=0");
-    W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_ModeMR); W5500_WriteByte(Eth, 0);
+    W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_ModeMR); W5500_WriteByte(Eth, 0x80);
     SysLog("EthernetAdapterCtl(...): Result: %X", W5500_ReadByte(Eth));
 
 
@@ -44,8 +44,10 @@ void EthernetAdapterCtl(void* arg){
 
     SysLog("EthernetAdapterCtl(...): Set MAC=00:08:DC:01:02:03");
     W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_SrcMACAddr0);
-    Data = MACToUint64(0x00, 0x02, 0xDC, 0x01, 0x02, 0x03); W5500_WriteNByte(Eth, (void*) &Data, 4);
-    SysLog("EthernetAdapterCtl(...): Result: %X", W5500_ReadQuartByte(Eth));
+    Data = MACToUint64(0x00, 0x08, 0xDC, 0x01, 0x02, 0x03); W5500_WriteNByte(Eth, (void*) &Data, 6);
+    Data = 0;
+    W5500_ReadNByte(Eth, (void*) &Data, 6);
+    SysLog("EthernetAdapterCtl(...): Result: %012LX", Data);
     
 
     SysLog("[AppService_HBridge] Join forever loop...");
@@ -70,7 +72,7 @@ void EthernetAdapterCtl(void* arg){
         // W5500_ReceiveData(Eth, EthHeader, (void *)&Data, 2);
         // SysLog("[EthernetAdapterCtl] Result = %X", Data & 0xFFFFFFFFFF);
 
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(20000));
     }
 }
 

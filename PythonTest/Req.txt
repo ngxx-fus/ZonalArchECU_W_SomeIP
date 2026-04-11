@@ -1,0 +1,6 @@
+# No external dependencies required for the current broadcast script
+# Standard libraries used: socket, time
+
+# Optional: Uncomment below if you want to use advanced networking tools later
+scapy==2.5.0
+netifaces==0.11.0

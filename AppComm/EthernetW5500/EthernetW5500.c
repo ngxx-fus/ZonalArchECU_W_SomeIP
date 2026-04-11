@@ -4,8 +4,15 @@
 #include <string.h>
 #include <stdio.h>
 
+
+
 /* Static handle for the SPI device instance */
 static spi_device_handle_t w5500_spi_handle;
+
+static void IRAM_ATTR W5500_OnPacketHandler(void* arg){
+    EthernetW5500_t* Ptr = (EthernetW5500_t*)(arg);
+    SysLog("W5500_OnPacketHandler(...): Incoming packet!");
+}
 
 /// @brief Allocate new EthernetW5500_t with preset pin; Init HSPI (SCS is manually controled)
 /// @param MISO Master In Slave Out pin
@@ -36,6 +43,15 @@ EthernetW5500_t* W5500_Create(Pin_t MISO, Pin_t MOSI, Pin_t CLK, Pin_t SCS, Pin_
     gpio_set_level(obj->Pinout.SCS, 1);
     gpio_set_level(obj->Pinout.RST, 1);
 
+    /* setup GPIO for Input Interrupt pin (INT) */
+    gpio_config_t in_conf = {
+        .intr_type = GPIO_INTR_NEGEDGE, /* W5500 INT is active low */
+        .mode = GPIO_MODE_INPUT,
+        .pin_bit_mask = (1ULL << obj->Pinout.INT),
+        .pull_up_en = 1, .pull_down_en = 0
+    };
+    gpio_config(&in_conf);
+
     /* configure SPI bus [cite: 110] */
     spi_bus_config_t bus_cfg = {
         .miso_io_num = MISO, .mosi_io_num = MOSI, .sclk_io_num = CLK,
@@ -44,14 +60,16 @@ EthernetW5500_t* W5500_Create(Pin_t MISO, Pin_t MOSI, Pin_t CLK, Pin_t SCS, Pin_
     };
     spi_bus_initialize(SPI2_HOST, &bus_cfg, SPI_DMA_CH_AUTO);
 
-    /* add W5500 to the bus with manual CS [cite: 113, 880] */
+    /* add W5500 to the bus with manual CS */
     spi_device_interface_config_t dev_cfg = {
-        .clock_speed_hz = 20 * 1000 * 1000,
+        .clock_speed_hz = 25 * 1000 * 1000,
         .mode = 0, .spics_io_num = -1,
         .queue_size = 7
     };
     spi_bus_add_device(SPI2_HOST, &dev_cfg, &w5500_spi_handle);
-
+    /* install ISR service and add handler for W5500 INT pin */
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(obj->Pinout.INT, W5500_OnPacketHandler, (void*) obj);
     return (EthernetW5500_t*) obj;
 }
 
@@ -172,7 +190,9 @@ ReturnCode_t W5500_SetHeader(EthernetW5500_t* Ptr, uint8_t BlockSelBits, uint16_
     Ptr->TxFrame.Header.AddrH       = (RegAddr & 0xFF00)>>8;
     Ptr->TxFrame.Header.AddrL       = (RegAddr & 0x00FF)>>0;
     Ptr->TxFrame.Header.BlockSel    = BlockSelBits  & 0x1F;
-    SysLog("W5500_SetHeader(...) : Header=%02X-%02X-%02X", Ptr->TxFrame.Byte[0], Ptr->TxFrame.Byte[1], Ptr->TxFrame.Byte[2]);
+    Ptr->TxFrame.Header.OpMode      = eW5500_VDM;
+    Ptr->TxFrame.Header.nRW         = eW5500_Read;
+    /// SysLog("W5500_SetHeader(...) : Header=%02X-%02X-%02X", Ptr->TxFrame.Byte[0], Ptr->TxFrame.Byte[1], Ptr->TxFrame.Byte[2]);
     return STAT_OKE;
 }
 
@@ -180,6 +200,7 @@ ReturnCode_t W5500_SetTxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N){
     if (IsNull(Ptr) || IsNull(Payload)) return STAT_ERR_NULL;
     /*Adjust for size*/
     N = (N < 0) ? 0 : (N > 1500) ? 1500 : N;
+    Ptr->TxFrame.Payload.Length = N;
     /*Perform transfer*/
     memcpy(Ptr->TxFrame.Payload.Byte, Payload, N);
     return STAT_OKE;
@@ -198,6 +219,7 @@ ReturnCode_t W5500_SetRxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N){
     if (IsNull(Ptr) || IsNull(Payload)) return STAT_ERR_NULL;
     /*Adjust for size*/
     N = (N < 0) ? 0 : (N > 1500) ? 1500 : N;
+    Ptr->RxFrame.Payload.Length = N;
     /*Perform transfer*/
     memcpy(Ptr->RxFrame.Payload.Byte, Payload, N);
     return STAT_OKE;
@@ -230,6 +252,8 @@ ReturnCode_t W5500_AccessNByte(EthernetW5500_t* Ptr, uint8_t nRW) {
             return STAT_ERR_INVALID_ARG;
     }
 
+    // SysLog("W5500_AccessNByte(...): # payload bytes: %d", N);
+
     /* Validate and clamp N based on the operational mode */
     switch (Ptr->TxFrame.Header.OpMode) {
         case eW5500_VDM:  N = (N < 1) ? 1 : (N > 1500) ? 1500 : N; break;
@@ -237,7 +261,10 @@ ReturnCode_t W5500_AccessNByte(EthernetW5500_t* Ptr, uint8_t nRW) {
         case eW5500_FDM2: N = 2; break;
         case eW5500_FDM4: N = 4; break;
     }
-
+    
+    // SysLog("W5500_AccessNByte(...): # payload bytes (after adjusted): %d", N);
+    // SysLog("W5500_AccessNByte(...): Header: %02X-%02X-%02X", Ptr->TxFrame.Byte[0], Ptr->TxFrame.Byte[1], Ptr->TxFrame.Byte[2]);
+    
     /* Synchronize frame lengths and prepare buffers */
     Ptr->TxFrame.Payload.Length = N;
     Ptr->RxFrame.Payload.Length = N;
@@ -248,6 +275,8 @@ ReturnCode_t W5500_AccessNByte(EthernetW5500_t* Ptr, uint8_t nRW) {
         memset(Ptr->TxFrame.Payload.Byte, 0, N);
     }
 
+    // SysLog("W5500_AccessNByte(...): # TX/RX  Bits: %d", 8 * (N + 3));
+
     /* Execute the SPI transaction with manual CS control */
     spi_transaction_t t = {
         .length = 8 * (N + 3),
@@ -255,13 +284,10 @@ ReturnCode_t W5500_AccessNByte(EthernetW5500_t* Ptr, uint8_t nRW) {
         .rx_buffer = Ptr->RxFrame.Byte
     };
 
-    esp_rom_delay_us(100);
     gpio_set_level(Ptr->Pinout.SCS, 0);
-    esp_rom_delay_us(100);
     spi_device_polling_transmit(w5500_spi_handle, &t); 
-    esp_rom_delay_us(100);
     gpio_set_level(Ptr->Pinout.SCS, 1);
-    esp_rom_delay_us(100);
+    // esp_rom_delay_us(100);
 
     return STAT_OKE;
 }
