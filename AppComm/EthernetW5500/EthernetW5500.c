@@ -167,12 +167,12 @@ ReturnCode_t W5500_ReceiveData(EthernetW5500_t* Ptr, W5500Header_t Header, void*
 
 /* NEW FUNCTION **********************************************************************************************************/
 
-ReturnCode_t W5500_SetHeader(EthernetW5500_t* Ptr, uint16_t RegAddr, uint8_t BlockSelBits, uint8_t nRW, uint8_t OpMode){
+ReturnCode_t W5500_SetHeader(EthernetW5500_t* Ptr, uint8_t BlockSelBits, uint16_t RegAddr){
     if (IsNull(Ptr)) return STAT_ERR_NULL;
-    Ptr->TxFrame.Header.AddrPhase   = RegAddr;
+    Ptr->TxFrame.Header.AddrH       = (RegAddr & 0xFF00)>>8;
+    Ptr->TxFrame.Header.AddrL       = (RegAddr & 0x00FF)>>0;
     Ptr->TxFrame.Header.BlockSel    = BlockSelBits  & 0x1F;
-    Ptr->TxFrame.Header.nRW         = nRW           & 0x01;
-    Ptr->TxFrame.Header.OpMode      = OpMode        & 0x03;
+    SysLog("W5500_SetHeader(...) : Header=%02X-%02X-%02X", Ptr->TxFrame.Byte[0], Ptr->TxFrame.Byte[1], Ptr->TxFrame.Byte[2]);
     return STAT_OKE;
 }
 
@@ -255,10 +255,29 @@ ReturnCode_t W5500_AccessNByte(EthernetW5500_t* Ptr, uint8_t nRW) {
         .rx_buffer = Ptr->RxFrame.Byte
     };
 
+    esp_rom_delay_us(100);
     gpio_set_level(Ptr->Pinout.SCS, 0);
+    esp_rom_delay_us(100);
     spi_device_polling_transmit(w5500_spi_handle, &t); 
+    esp_rom_delay_us(100);
     gpio_set_level(Ptr->Pinout.SCS, 1);
+    esp_rom_delay_us(100);
 
+    return STAT_OKE;
+}
+
+ReturnCode_t W5500_ReadNByte(EthernetW5500_t* Ptr, uint8_t* Buffer, uint16_t Len) {
+    if (IsNull(Ptr) || IsNull(Buffer)) return STAT_ERR_NULL;
+
+    /* Configure for Variable Data Length Mode and execute transaction */
+    Ptr->TxFrame.Header.OpMode = eW5500_VDM;
+    Ptr->RxFrame.Payload.Length = Len;
+    if (W5500_AccessNByte(Ptr, eW5500_Read) != STAT_OKE) {
+        return STAT_ERR_IO;
+    }
+
+    /* Copy received data from internal payload to user buffer */
+    memcpy(Buffer, Ptr->RxFrame.Payload.Byte, Len);
     return STAT_OKE;
 }
 
@@ -297,6 +316,17 @@ ReturnCode_t W5500_ReadQuartByte(EthernetW5500_t* Ptr) {
     if (W5500_AccessNByte(Ptr, eW5500_Read) != STAT_OKE) return 0;
     return (ReturnCode_t)((Ptr->RxFrame.Payload.Byte[0] << 24) | (Ptr->RxFrame.Payload.Byte[1] << 16) | 
                           (Ptr->RxFrame.Payload.Byte[2] << 8)  |  Ptr->RxFrame.Payload.Byte[3]);
+}
+
+ReturnCode_t W5500_WriteNByte(EthernetW5500_t* Ptr, uint8_t* Data, uint16_t Len) {
+    if (IsNull(Ptr) || IsNull(Data)) return STAT_ERR_NULL;
+
+    /* Copy data to internal buffer and set VDM mode */
+    W5500_SetTxPayload(Ptr, Data, Len);
+    Ptr->TxFrame.Header.OpMode = eW5500_VDM;
+
+    /* Execute SPI write transaction */
+    return W5500_AccessNByte(Ptr, eW5500_Write);
 }
 
 ReturnCode_t W5500_WriteByte(EthernetW5500_t* Ptr, uint8_t Data) {
@@ -503,6 +533,38 @@ ReturnCode_t ConvertUInt32ToIPv4Address(uint32_t IPv4Addr, char IPv4Str[]) {
     sprintf(IPv4Str, "%u.%u.%u.%u", b0, b1, b2, b3);
 
     return STAT_OKE;
+}
+
+/// @brief Convert IPv4 octets to a 32-bit integer in Big-endian (Network) order
+/// @param Octet0 First octet (e.g., 192)
+/// @param Octet1 Second octet (e.g., 168)
+/// @param Octet2 Third octet (e.g., 1)
+/// @param Octet3 Fourth octet (e.g., 10)
+/// @return uint32_t The packed 32-bit IP address
+uint32_t IPv4ToUint32(uint8_t Octet0, uint8_t Octet1, uint8_t Octet2, uint8_t Octet3) {
+    /* Shift octets into a 32-bit container in Big-endian order */
+    return ((uint32_t)Octet0 << 24) | 
+           ((uint32_t)Octet1 << 16) | 
+           ((uint32_t)Octet2 << 8)  | 
+           ((uint32_t)Octet3);
+}
+
+/// @brief Convert 6 MAC address octets to a 64-bit integer
+/// @param Octet0 High byte of MAC (Most Significant Byte)
+/// @param Octet1 Second byte
+/// @param Octet2 Third byte
+/// @param Octet3 Fourth byte
+/// @param Octet4 Fifth byte
+/// @param Octet5 Low byte of MAC (Least Significant Byte)
+/// @return uint64_t The packed MAC address
+uint64_t MACToUint64(uint8_t Octet0, uint8_t Octet1, uint8_t Octet2, uint8_t Octet3, uint8_t Octet4, uint8_t Octet5) {
+    /* Pack 48-bit MAC address into a 64-bit container in Big-endian order */
+    return ((uint64_t)Octet0 << 40) |
+           ((uint64_t)Octet1 << 32) |
+           ((uint64_t)Octet2 << 24) |
+           ((uint64_t)Octet3 << 16) |
+           ((uint64_t)Octet4 << 8)  |
+           ((uint64_t)Octet5);
 }
 
 /* EOF *******************************************************************************************************************/

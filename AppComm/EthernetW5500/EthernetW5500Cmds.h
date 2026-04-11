@@ -49,7 +49,7 @@ enum eW5500SPIOpModeCmd {
 };
 
 enum eW5500CommonRegisterAddress {
-    eW5500_CommonRegister    = 0x0,
+    eW5500_CommonRegisters    = 0x0,
 };
 
 enum eW5500CommonRegisterOffset {

@@ -6,7 +6,6 @@ SemaphoreHandle_t    EthLock;
 void EthernetAdapterCtl(void* arg){
     SysEntry("EthernetAdapterCtl");
     
-    W5500Header_t   EthHeader;
     uint64_t        Data; 
 
     /* initialize mutex before creating motor object */
@@ -21,8 +20,34 @@ void EthernetAdapterCtl(void* arg){
         return;
     }
 
+    SysLog("EthernetAdapterCtl(...): Set ComReg=0");
+    W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_ModeMR); W5500_WriteByte(Eth, 0);
+    SysLog("EthernetAdapterCtl(...): Result: %X", W5500_ReadByte(Eth));
 
+
+    SysLog("EthernetAdapterCtl(...): Set GWAddr=10.0.0.1");
+    W5500_SetHeader(Eth,  eW5500_CommonRegisters, eW5500_GWAddr0); 
+    W5500_WriteQuartByte(Eth, IPv4ToUint32(10, 0, 0, 1));
+    SysLog("EthernetAdapterCtl(...): Result: %X", W5500_ReadQuartByte(Eth));
+
+    SysLog("EthernetAdapterCtl(...): Set SubnetMask=255.255.255.0");
+    W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_SubnetMask0);
+    W5500_WriteQuartByte(Eth, IPv4ToUint32(255,255,255,0));
+    SysLog("EthernetAdapterCtl(...): Result: %X", W5500_ReadQuartByte(Eth));
+
+
+    SysLog("EthernetAdapterCtl(...): Set IP=10.0.0.19");
+    W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_SrcIPAddr0); 
+    W5500_WriteQuartByte(Eth, IPv4ToUint32(10, 0, 0, 19));
+    SysLog("EthernetAdapterCtl(...): Result: %X", W5500_ReadQuartByte(Eth));
     
+
+    SysLog("EthernetAdapterCtl(...): Set MAC=00:08:DC:01:02:03");
+    W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_SrcMACAddr0);
+    Data = MACToUint64(0x00, 0x02, 0xDC, 0x01, 0x02, 0x03); W5500_WriteNByte(Eth, (void*) &Data, 4);
+    SysLog("EthernetAdapterCtl(...): Result: %X", W5500_ReadQuartByte(Eth));
+    
+
     SysLog("[AppService_HBridge] Join forever loop...");
     while (1) {
         uint64_t Data0, Data1;
@@ -30,7 +55,7 @@ void EthernetAdapterCtl(void* arg){
         Data0 = 0x17;
         Data1 = 0;
         /// W5500_LoopbackTest(Eth, (uint8_t*)&Data0, (uint8_t*)&Data1);
-        W5500_SetHeader(Eth, eW5500_CommonRegister + eW5500_VersionReg, 0, eW5500_Read, eW5500_FDM1);
+        W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_VersionReg);
         Data = W5500_ReadByte(Eth);
         SysLog("[EthernetAdapterCtl] Get version %X", Data);
 
