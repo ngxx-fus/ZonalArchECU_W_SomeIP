@@ -118,39 +118,6 @@ EthernetW5500_t*W5500_Create(Pin_t MISO, Pin_t MOSI, Pin_t CLK, Pin_t SCS, Pin_t
 /// @return 
 ReturnCode_t    W5500_Delete(EthernetW5500_t** Ptr);
 
-/// @brief Pull SCS pin to down then send the 3 bytes of header, then keep the SCS low when exit the function
-/// @param Ptr 
-/// @param Header 
-/// @return 
-ReturnCode_t    W5500_SendHeader(EthernetW5500_t* Ptr, W5500Header_t Header);
-
-/// @brief Pull SCS pin to down; Send N bytes of payload; Set SCS to HIGH
-/// @param Ptr 
-/// @param Payload 
-/// @param PayloadLength 
-/// @return 
-ReturnCode_t    W5500_SendPayload(EthernetW5500_t* Ptr, void* Payload, uint16_t PayloadLength);
-
-/// @brief Pull SCS pin to down then send the 3 bytes of header then send 1-4 byte of payload depend of header set SCS to HIGH
-/// @param Ptr 
-/// @param Header 
-/// @return 
-ReturnCode_t    W5500_SendCommand(EthernetW5500_t* Ptr, W5500Header_t Header, void* Payload);
-
-/// @brief Pull SCS pin to down then send the 3 bytes of header then send 1-4 byte of payload depend of header set SCS to HIGH
-/// @param Ptr 
-/// @param Header 
-/// @return 
-ReturnCode_t    W5500_SendData(EthernetW5500_t* Ptr, W5500Header_t Header, void* Payload, uint16_t PayloadLength);
-
-/// @brief Pull SCS pin to down then READ the 3 bytes of header then read 1-4 byte of payload depend of header set SCS to HIGH
-/// @param Ptr 
-/// @param Header 
-/// @return 
-ReturnCode_t    W5500_ReceiveData(EthernetW5500_t* Ptr, W5500Header_t Header, void* Payload, uint16_t PayloadLength);
-
-/*Test*/
-
 /// @brief Pre-configures the SPI frame header in the transmission buffer
 /// @param Ptr Pointer to the W5500 management structure
 /// @param RegAddr 16-bit offset address of the target register
@@ -241,7 +208,14 @@ ReturnCode_t W5500_WriteDoubleByte(EthernetW5500_t* Ptr, uint16_t Data);
 /// @return STAT_OKE on success
 ReturnCode_t W5500_WriteQuartByte(EthernetW5500_t* Ptr, uint32_t Data);
 
-/*Public utils*/
+/* COMPOSE FN *******************************************************************************************************************/
+
+/// @brief Read the hardware version code from VERSIONR (0x0039)
+/// @param Ptr Pointer to the W5500 controller structure
+/// @return STAT_OKE if successful, STAT_ERR_NULL if pointer is invalid
+ReturnCode_t W5500_GetModuleVersion(EthernetW5500_t* Ptr);
+
+/* UTILS ************************************************************************************************************************/
 
 /// @brief Convert a 4-byte array to an IPv4 string
 /// @param IPv4Addr Input array of 4 bytes
@@ -297,4 +271,27 @@ uint32_t IPv4ToUint32(uint8_t Octet0, uint8_t Octet1, uint8_t Octet2, uint8_t Oc
 /// @return uint64_t The packed MAC address
 uint64_t MACToUint64(uint8_t Octet0, uint8_t Octet1, uint8_t Octet2, uint8_t Octet3, uint8_t Octet4, uint8_t Octet5);
 
+/// @brief Convert a byte array to a 32-bit unsigned integer using Big Endian
+/// @param ByteArr Pointer to the source byte array
+/// @param Size Number of bytes to process (max 4)
+/// @return The converted 32-bit unsigned integer
+uint32_t ConvertByteArrayToInt32_BigEndian(const uint8_t* ByteArr, uint8_t Size);
+
+/// @brief Convert a byte array to a 64-bit unsigned integer using Big Endian
+/// @param ByteArr Pointer to the source byte array
+/// @param Size Number of bytes to process (max 8)
+/// @return The converted 64-bit unsigned integer
+uint64_t ConvertByteArrayToInt64_BigEndian(const uint8_t* ByteArr, uint8_t Size);
+
+/// @brief Convert a byte array to a 32-bit unsigned integer using Little Endian
+/// @param ByteArr Pointer to the source byte array
+/// @param Size Number of bytes to process (max 4)
+/// @return The converted 32-bit unsigned integer
+uint32_t ConvertByteArrayToInt32_LittleEndian(const uint8_t* ByteArr, uint8_t Size);
+
+/// @brief Convert a byte array to a 64-bit unsigned integer using Little Endian
+/// @param ByteArr Pointer to the source byte array
+/// @param Size Number of bytes to process (max 8)
+/// @return The converted 64-bit unsigned integer
+uint64_t ConvertByteArrayToInt64_LittleEndian(const uint8_t* ByteArr, uint8_t Size);
 #endif /// __ETHERNET_W5500_H__

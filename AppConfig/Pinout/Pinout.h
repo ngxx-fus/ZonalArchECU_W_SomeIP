@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 #ifdef PRINT_HEADER_COMPILE_MESSAGE
-#pragma message ("AppConfig/DevicePinout.h")
+#pragma message ("AppConfig/Pinout.h")
 #endif
 
 #include <stdint.h>

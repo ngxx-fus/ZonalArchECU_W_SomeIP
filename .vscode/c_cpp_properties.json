@@ -159,7 +159,9 @@
                 "/home/fus/esp/components/xtensa/include",
                 "/home/fus/esp/components/freertos/FreeRTOS-Kernel/portable/xtensa/include",
                 "/home/fus/esp/components/freertos/FreeRTOS-Kernel/portable/xtensa/include/freertos/",
-                "/home/fus/esp/components/esp_libc/platform_include/"
+                "/home/fus/esp/components/esp_libc/platform_include/",
+                "/home/fus/esp/components/freertos/FreeRTOS-Kernel/include/freertos/",
+                "/home/fus/esp/components/esp_system/test_eh_frame_parser/"
             ],
             "defines": [
                 "ESP32",

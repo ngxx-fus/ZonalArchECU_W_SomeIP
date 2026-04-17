@@ -22,6 +22,7 @@ idf_component_register(
     SRCS "${srcs}"
     INCLUDE_DIRS "${include_dirs}"
     REQUIRES 
+        "AppConfig"
         "AppUtils" 
         "AppESPWrap" 
         esp_driver_gpio 

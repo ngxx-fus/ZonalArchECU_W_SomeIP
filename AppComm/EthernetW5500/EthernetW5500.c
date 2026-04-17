@@ -86,105 +86,6 @@ ReturnCode_t W5500_Delete(EthernetW5500_t** Ptr) {
     return STAT_OKE;
 }
 
-/// @brief Pull SCS pin to down then send the 3 bytes of header
-/// @param Ptr Pointer to management object
-/// @param Header W5500 SPI header
-/// @return ReturnCode_t STAT_OKE
-ReturnCode_t W5500_SendHeader(EthernetW5500_t* Ptr, W5500Header_t Header) {
-    EthernetW5500_t* obj = (EthernetW5500_t*)Ptr;
-    if (obj == NULL) return STAT_ERR_NULL;
-
-    /* begin transaction: pull SCS low  */
-    gpio_set_level(obj->Pinout.SCS, 0);
-
-    spi_transaction_t t = {
-        .length = 8 * 3,
-        .tx_buffer = &Header
-    };
-    /* synchronous polling transmit */
-    spi_device_polling_transmit(w5500_spi_handle, &t);
-    return STAT_OKE;
-}
-
-/// @brief Send N bytes of payload; Set SCS to HIGH
-/// @param Ptr Pointer to management object
-/// @param Payload Data buffer
-/// @param PayloadLength Byte count
-/// @return ReturnCode_t STAT_OKE
-ReturnCode_t W5500_SendPayload(EthernetW5500_t* Ptr, void* Payload, uint16_t PayloadLength) {
-    EthernetW5500_t* obj = (EthernetW5500_t*)Ptr;
-    if (obj == NULL || Payload == NULL) return STAT_ERR_NULL;
-
-    spi_transaction_t t = {
-        .length = 8 * PayloadLength,
-        .tx_buffer = Payload
-    };
-    /* transmit data phase [cite: 35] */
-    spi_device_polling_transmit(w5500_spi_handle, &t);
-    
-    /* end transaction: pull SCS high [cite: 17] */
-    gpio_set_level(obj->Pinout.SCS, 1);
-    return STAT_OKE;
-}
-
-/// @brief Send header followed by 1-4 byte of payload
-/// @param Ptr Pointer to management object
-/// @param Header W5500 header with FDM bits
-/// @param Payload Data buffer
-/// @return ReturnCode_t Result status
-ReturnCode_t W5500_SendCommand(EthernetW5500_t* Ptr, W5500Header_t Header, void* Payload) {
-    uint16_t len = 0;
-    /* determine length from OpMode bits */
-    if (Header.OpMode == eW5500_FDM1) len = 1;
-    else if (Header.OpMode == eW5500_FDM2) len = 2;
-    else if (Header.OpMode == eW5500_FDM4) len = 4;
-    else return STAT_ERR_INVALID_ARG;
-
-    W5500_SendHeader(Ptr, Header);
-    return W5500_SendPayload(Ptr, Payload, len);
-}
-
-/// @brief Send header followed by N bytes of variable payload
-/// @param Ptr Pointer to management object
-/// @param Header W5500 header with VDM bits
-/// @param Payload Data buffer
-/// @param PayloadLength Byte count
-/// @return ReturnCode_t Result status
-ReturnCode_t W5500_SendData(EthernetW5500_t* Ptr, W5500Header_t Header, void* Payload, uint16_t PayloadLength) {
-    /* ensure Write bit is set correctly */
-    Header.nRW = eW5500_Write;
-    W5500_SendHeader(Ptr, Header);
-    return W5500_SendPayload(Ptr, Payload, PayloadLength);
-}
-
-/// @brief Read data from W5500
-/// @param Ptr Pointer to management object
-/// @param Header W5500 header with Read bit
-/// @param Payload RX buffer
-/// @param PayloadLength Byte count
-/// @return ReturnCode_t Result status
-ReturnCode_t W5500_ReceiveData(EthernetW5500_t* Ptr, W5500Header_t Header, void* Payload, uint16_t PayloadLength) {
-    EthernetW5500_t* obj = (EthernetW5500_t*)Ptr;
-    if (obj == NULL || Payload == NULL) return STAT_ERR_NULL;
-
-    /* ensure Read bit is set [cite: 35] */
-    Header.nRW = eW5500_Read;
-    W5500_SendHeader(Ptr, Header);
-
-    spi_transaction_t t = {
-        .length = 8 * PayloadLength,
-        .rxlength = 8 * PayloadLength,
-        .rx_buffer = Payload
-    };
-    /* receive data phase [cite: 35, 45] */
-    spi_device_polling_transmit(w5500_spi_handle, &t);
-    
-    gpio_set_level(obj->Pinout.SCS, 1);
-    return STAT_OKE;
-}
-
-/* NEW FUNCTION **********************************************************************************************************/
-
 ReturnCode_t W5500_SetHeader(EthernetW5500_t* Ptr, uint8_t BlockSelBits, uint16_t RegAddr){
     if (IsNull(Ptr)) return STAT_ERR_NULL;
     Ptr->TxFrame.Header.AddrH       = (RegAddr & 0xFF00)>>8;
@@ -392,7 +293,7 @@ ReturnCode_t W5500_WriteQuartByte(EthernetW5500_t* Ptr, uint32_t Data) {
     return W5500_AccessNByte(Ptr, eW5500_Write);
 }
 
-/* TEST ******************************************************************************************************************/
+/* TEST *************************************************************************************************************************/
 
 /// @brief Perform a true 5-byte loopback test (Header + Data)
 /// @param tx_data Pointer to 2 bytes of test data
@@ -431,7 +332,36 @@ ReturnCode_t W5500_LoopbackTest(EthernetW5500_t* Ptr, uint8_t tx_data[2], uint8_
     return STAT_OKE;
 }
 
-/* UTILS *****************************************************************************************************************/
+/* COMPOSE FN *******************************************************************************************************************/
+
+/// @brief Read the hardware version code from VERSIONR (0x0039)
+/// @param Ptr Pointer to the W5500 controller structure
+/// @return STAT_OKE if successful, STAT_ERR_NULL if pointer is invalid
+ReturnCode_t W5500_GetModuleVersion(EthernetW5500_t* Ptr) {
+    EthernetW5500_t* obj = (EthernetW5500_t*)Ptr;
+    if (obj == NULL) return STAT_ERR_NULL;
+
+    /* Prepare 4-byte buffer for Read transaction (3 Header + 1 Data) */
+    uint8_t tx_buf[4] = {0x00, 0x39, 0x01, 0x00};
+    uint8_t rx_buf[4] = {0};
+
+    spi_transaction_t t = {
+        .length = 8 * 4,
+        .tx_buffer = tx_buf,
+        .rx_buffer = rx_buf
+    };
+
+    /* Execute continuous SPI transaction to fetch version byte */
+    gpio_set_level(obj->Pinout.SCS, 0);
+    spi_device_polling_transmit(w5500_spi_handle, &t);
+    gpio_set_level(obj->Pinout.SCS, 1);
+
+    SysLog("W5500_GetModuleVersion(...): Hardware Version: 0x%02X", rx_buf[3]);
+
+    return rx_buf[3];
+}
+
+/* UTILS ************************************************************************************************************************/
 
 /// @brief Convert a 4-byte array to an IPv4 string
 /// @param IPv4Addr Input array of 4 bytes
@@ -591,6 +521,74 @@ uint64_t MACToUint64(uint8_t Octet0, uint8_t Octet1, uint8_t Octet2, uint8_t Oct
            ((uint64_t)Octet3 << 16) |
            ((uint64_t)Octet4 << 8)  |
            ((uint64_t)Octet5);
+}
+
+/// @brief Convert a byte array to a 32-bit unsigned integer (Big Endian)
+/// @param ByteArr Pointer to the source byte array
+/// @param Size Number of bytes to convert (max 4)
+/// @return The converted 32-bit unsigned integer
+uint32_t ConvertByteArrayToInt32_BigEndian(const uint8_t* ByteArr, uint8_t Size) {
+    /* Initialize result and set processing limit to 4 bytes */
+    uint32_t result = 0;
+    uint8_t limit = (Size > 4) ? 4 : Size;
+
+    /* Shift and OR bytes into integer starting from most significant byte */
+    for (uint8_t i = 0; i < limit; i++) {
+        result = (result << 8) | ByteArr[i];
+    }
+
+    return result;
+}
+
+/// @brief Convert a byte array to a 64-bit unsigned integer (Big Endian)
+/// @param ByteArr Pointer to the source byte array
+/// @param Size Number of bytes to convert (max 8)
+/// @return The converted 64-bit unsigned integer
+uint64_t ConvertByteArrayToInt64_BigEndian(const uint8_t* ByteArr, uint8_t Size) {
+    /* Initialize result and set processing limit to 8 bytes */
+    uint64_t result = 0;
+    uint8_t limit = (Size > 8) ? 8 : Size;
+
+    /* Shift and OR bytes into integer starting from most significant byte */
+    for (uint8_t i = 0; i < limit; i++) {
+        result = (result << 8) | ByteArr[i];
+    }
+
+    return result;
+}
+
+/// @brief Convert a byte array to a 32-bit unsigned integer (Little Endian)
+/// @param ByteArr Pointer to the source byte array
+/// @param Size Number of bytes to convert (max 4)
+/// @return The converted 32-bit unsigned integer
+uint32_t ConvertByteArrayToInt32_LittleEndian(const uint8_t* ByteArr, uint8_t Size) {
+    /* Initialize result and set processing limit to 4 bytes */
+    uint32_t result = 0;
+    uint8_t limit = (Size > 4) ? 4 : Size;
+
+    /* Shift and OR bytes into integer starting from least significant byte */
+    for (uint8_t i = 0; i < limit; i++) {
+        result |= ((uint32_t)ByteArr[i] << (8 * i));
+    }
+
+    return result;
+}
+
+/// @brief Convert a byte array to a 64-bit unsigned integer (Little Endian)
+/// @param ByteArr Pointer to the source byte array
+/// @param Size Number of bytes to convert (max 8)
+/// @return The converted 64-bit unsigned integer
+uint64_t ConvertByteArrayToInt64_LittleEndian(const uint8_t* ByteArr, uint8_t Size) {
+    /* Initialize result and set processing limit to 8 bytes */
+    uint64_t result = 0;
+    uint8_t limit = (Size > 8) ? 8 : Size;
+
+    /* Shift and OR bytes into integer starting from least significant byte */
+    for (uint8_t i = 0; i < limit; i++) {
+        result |= ((uint64_t)ByteArr[i] << (8 * i));
+    }
+
+    return result;
 }
 
 /* EOF *******************************************************************************************************************/

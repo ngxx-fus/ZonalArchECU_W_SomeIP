@@ -30,7 +30,7 @@ def get_mac_address(target_ip):
         return None
 
 if __name__ == "__main__":
-    TARGET_IP = "10.0.0.10"
+    TARGET_IP = "10.0.0.19"
     
     print(f"Starting ARP discovery for {TARGET_IP}...")
     
@@ -43,4 +43,4 @@ if __name__ == "__main__":
         else:
             print(f"Failed: {TARGET_IP} did not respond to ARP.")
             
-        time.sleep(1)
+        time.sleep(20)

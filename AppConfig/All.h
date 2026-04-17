@@ -12,6 +12,7 @@ extern "C" {
 #include <stdint.h>
 #include <stdlib.h>
 
+#include "Comm/Comm.h"
 #include "Pinout/Pinout.h"
 #include "SystemLog.h"
 
