@@ -13,30 +13,30 @@ ReturnCode_t EthernetAdapterCtl_Init(EthernetW5500_t * Eth) {
 
     /* Reset device and set mode register */
     SysLog("EthernetAdapterCtl(...): Set ComReg=0");
-    W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_ModeMR); W5500_WriteByte(Eth, 0x80);
+    W5500_SetHeader(Eth, eW5500_SelectsCommonRegister, eW5500_ModeMR); W5500_WriteByte(Eth, 0x80);
     SysLog("EthernetAdapterCtl(...): Result: %X", W5500_ReadByte(Eth));
 
     /* Configure Gateway Address */
     SysLog("EthernetAdapterCtl(...): Set GWAddr=%s", GW_IP_ADDR_STR);
-    W5500_SetHeader(Eth,  eW5500_CommonRegisters, eW5500_GWAddr0); 
+    W5500_SetHeader(Eth,  eW5500_SelectsCommonRegister, eW5500_GWAddr0); 
     W5500_WriteQuartByte(Eth, ConvertByteArrayToInt32_BigEndian(GW_IP_ADDR, 4));
     SysLog("EthernetAdapterCtl(...): Result: %X", W5500_ReadQuartByte(Eth));
 
     /* Configure Subnet Mask */
     SysLog("EthernetAdapterCtl(...): Set SubnetMask=%s", SUBNET_MASK_STR);
-    W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_SubnetMask0);
+    W5500_SetHeader(Eth, eW5500_SelectsCommonRegister, eW5500_SubnetMask0);
     W5500_WriteQuartByte(Eth, ConvertByteArrayToInt32_BigEndian(SUBNET_MASK, 4));
     SysLog("EthernetAdapterCtl(...): Result: %X", W5500_ReadQuartByte(Eth));
 
     /* Configure Source IP Address */
     SysLog("EthernetAdapterCtl(...): Set IP=%s", SRC_IP_ADDR_STR);
-    W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_SrcIPAddr0); 
+    W5500_SetHeader(Eth, eW5500_SelectsCommonRegister, eW5500_SrcIPAddr0); 
     W5500_WriteQuartByte(Eth, ConvertByteArrayToInt32_BigEndian(SRC_IP_ADDR, 4));
     SysLog("EthernetAdapterCtl(...): Result: %X", W5500_ReadQuartByte(Eth));
     
     /* Configure Hardware MAC Address */
     SysLog("EthernetAdapterCtl(...): Set MAC=00:08:DC:01:02:03");
-    W5500_SetHeader(Eth, eW5500_CommonRegisters, eW5500_SrcMACAddr0);
+    W5500_SetHeader(Eth, eW5500_SelectsCommonRegister, eW5500_SrcMACAddr0);
     Data = ConvertByteArrayToInt64_BigEndian(SRC_MAC_ADDR, 6); 
     W5500_WriteNByte(Eth, (void*) &Data, 6);
     Data = 0; W5500_ReadNByte(Eth, (void*) &Data, 6);
