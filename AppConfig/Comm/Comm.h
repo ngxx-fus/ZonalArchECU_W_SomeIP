@@ -1,0 +1,36 @@
+#ifndef __DEVICE_COMM_H__
+#define __DEVICE_COMM_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef PRINT_HEADER_COMPILE_MESSAGE
+#pragma message ("AppConfig/Comm.h")
+#endif
+
+#include <stdint.h>
+#include <stdlib.h>
+
+/// @brief Type of a GPIO
+typedef uint8_t Byte_t;
+
+/// GENERATED SECTION | BEGIN /////////////////////////////////////////////////
+#define GW_IP_ADDR_STR "10.0.0.1"
+#define SRC_MAC_ADDR_STR "00:08:DC:01:02:03"
+#define SUBNET_MASK_STR "255.255.255.0"
+#define SRC_IP_ADDR_STR "10.0.0.19"
+#define SOMEIP_PORT_STR "42"
+extern Byte_t GW_IP_ADDR[];
+extern Byte_t SRC_MAC_ADDR[];
+extern Byte_t SUBNET_MASK[];
+extern Byte_t SRC_IP_ADDR[];
+extern Byte_t SOMEIP_PORT[];
+
+/// GENERATED SECTION | END   /////////////////////////////////////////////////
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /// __DEVICE_PINOUT_H__

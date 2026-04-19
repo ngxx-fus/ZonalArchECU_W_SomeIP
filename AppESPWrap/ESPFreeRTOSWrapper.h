@@ -16,6 +16,16 @@ extern "C" {
 #include "freertos/task.h"       /// Task management
 #include "freertos/semphr.h"     /// Semaphores and Mutexes
 
+/// @brief Standardized Task Priorities scaled to the system's maximum priority
+typedef enum {
+    eTask_Background = (configMAX_PRIORITIES - 1) * 0 / 5, /* Lowest: Logging, Telemetry, System monitor */
+    eTask_Low        = (configMAX_PRIORITIES - 1) * 1 / 5, /* Low: Status LEDs, Non-critical services */
+    eTask_Normal     = (configMAX_PRIORITIES - 1) * 2 / 5, /* Standard: UI, General application logic */
+    eTask_High       = (configMAX_PRIORITIES - 1) * 3 / 5, /* High: Sensor sampling, H-Bridge control */
+    eTask_Urgency    = (configMAX_PRIORITIES - 1) * 4 / 5, /* Critical: Safety checks, Comms heartbeats */
+    eTask_RealTime   = (configMAX_PRIORITIES - 1) * 5 / 5  /* Maximum: Immediate hardware response */
+} TaskPriority_e;
+
 #ifndef EnterCriticalSection
     /// Enter critical section (disable interrupts) - Use with care!
     #define EnterCriticalSection(mutex_ptr)   taskENTER_CRITICAL(mutex_ptr)

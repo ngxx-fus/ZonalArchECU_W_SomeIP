@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 #ifdef PRINT_HEADER_COMPILE_MESSAGE
-#pragma message ("AppConfig/DevicePinout.h")
+#pragma message ("AppConfig/Pinout.h")
 #endif
 
 #include <stdint.h>
@@ -36,6 +36,12 @@ enum PIN_STATE_e {
 #define PIN_B_DC_IN1 ((Pin_t)4)
 #define PIN_B_DC_IN2 ((Pin_t)16)
 #define PIN_B_DC_IN3 ((Pin_t)17)
+#define PIN_W5500_MOSI ((Pin_t)13)
+#define PIN_W5500_MISO ((Pin_t)12)
+#define PIN_W5500_CLK ((Pin_t)14)
+#define PIN_W5500_SCS ((Pin_t)15)
+#define PIN_W5500_INT ((Pin_t)26)
+#define PIN_W5500_RST ((Pin_t)27)
 /// GENERATED SECTION | END   /////////////////////////////////////////////////
 
 #ifdef __cplusplus
