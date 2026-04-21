@@ -9,10 +9,11 @@
 /* Static handle for the SPI device instance */
 static spi_device_handle_t w5500_spi_handle;
 
-static void IRAM_ATTR W5500_OnPacketHandler(void* arg){
-    EthernetW5500_t* Ptr = (EthernetW5500_t*)(arg);
-    SysLog("W5500_OnPacketHandler(...): Incoming packet!");
-}
+// static void IRAM_ATTR W5500_OnPacketHandler(void* arg){
+//     EthernetW5500_t* Ptr = (EthernetW5500_t*)(arg);
+//     SysLog("W5500_OnPacketHandler(...): Incoming packet!");
+// }
+
 
 /// @brief Allocate new EthernetW5500_t with preset pin; Init HSPI (SCS is manually controled)
 /// @param MISO Master In Slave Out pin

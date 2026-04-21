@@ -103,6 +103,8 @@ typedef union __attribute__((packed)) EthernetW5500_t {
 
 /*Public API*/
 
+void W5500_OnPacketHandler(void* arg);
+
 /// @brief Allocate new EthernetW5500_t with preset pin; Init HSPI (SCS is manually controled)
 /// @param MISO 
 /// @param MOSI 
