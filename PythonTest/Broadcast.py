@@ -1,5 +1,14 @@
 from scapy.all import ARP, Ether, srp
 import time
+from datetime import datetime
+
+# @brief Helper function to print logs with a precise timestamp [HH:MM:SS.SS]
+# @param message The string content to print
+def log(message):
+    now = datetime.now()
+    # strftime("%f") trả về microsecond (6 số), ta cắt lấy 2 số đầu để ra .SS
+    timestamp = now.strftime("[%H:%M:%S.") + f"{now.microsecond // 10000:02d}]"
+    print(f"{timestamp} {message}")
 
 # @brief Discovers the MAC address of a target IP using ARP protocol
 # @param target_ip The IP address to query (e.g., "10.0.0.1")
@@ -26,21 +35,21 @@ def get_mac_address(target_ip):
             return None
             
     except Exception as e:
-        print(f"Error during ARP request: {e}")
+        log(f"Error during ARP request: {e}")
         return None
 
 if __name__ == "__main__":
     TARGET_IP = "10.0.0.19"
     
-    print(f"Starting ARP discovery for {TARGET_IP}...")
+    log(f"Starting ARP discovery for {TARGET_IP}...")
     
     """ Loop to query the MAC address periodically """
     while True:
         mac = get_mac_address(TARGET_IP)
         
         if mac:
-            print(f"Success: The MAC address of {TARGET_IP} is {mac}")
+            log(f"Success: The MAC address of {TARGET_IP} is {mac}")
         else:
-            print(f"Failed: {TARGET_IP} did not respond to ARP.")
+            log(f"Failed: {TARGET_IP} did not respond to ARP.")
             
-        time.sleep(20)
+        time.sleep(1)

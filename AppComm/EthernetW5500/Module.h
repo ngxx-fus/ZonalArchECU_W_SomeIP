@@ -15,7 +15,6 @@ extern SemaphoreHandle_t    EthLock;
 // ReturnCode_t EthSetIPv4SourceAddress(uint32_t IPv4Addr);
 // ReturnCode_t EthSetIPv4SourcePort(uint16_t IPv4Port);
 
-
 /*Runtime service*/
 void EthernetAdapterCtl(void* arg);
 

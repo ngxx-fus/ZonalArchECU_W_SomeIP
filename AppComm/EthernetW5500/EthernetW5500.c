@@ -4,25 +4,47 @@
 #include <string.h>
 #include <stdio.h>
 
+/* STATIC VARIABLES *************************************************************************************************************/
 
+/* Static handler for the W5500 semaphore*/
+SemaphoreHandle_t    W5500_Lock;
 
-/* Static handle for the SPI device instance */
+/* Static handler for the SPI device instance */
 static spi_device_handle_t w5500_spi_handle;
 
-// static void IRAM_ATTR W5500_OnPacketHandler(void* arg){
-//     EthernetW5500_t* Ptr = (EthernetW5500_t*)(arg);
-//     SysLog("W5500_OnPacketHandler(...): Incoming packet!");
-// }
+/* W5500 Isr Tracking task function pointer */
+void (*W5500_IsrTracking_Function)(void*);
 
+/* W5500 Isr Tracking task handle*/
+TaskHandle_t W5500_IsrTracking_TaskHandle;
 
-/// @brief Allocate new EthernetW5500_t with preset pin; Init HSPI (SCS is manually controled)
-/// @param MISO Master In Slave Out pin
-/// @param MOSI Master Out Slave In pin
-/// @param CLK Serial Clock pin
-/// @param SCS Slave Chip Select pin
-/// @param RST Reset pin
-/// @param INT Interrupt pin
-/// @return ReturnCode_t* Pointer to the allocated object cast as ReturnCode_t*
+/// @brief Handle incoming interrupts from W5500 for MACRAW and ICMP with semaphore protection
+/// @param arg Pointer to the EthernetW5500_t structure
+/// @return void
+static void IRAM_ATTR W5500_IsrHandler(void* arg) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    vTaskNotifyGiveFromISR(W5500_IsrTracking_TaskHandle, &xHigherPriorityTaskWoken);
+    if (xHigherPriorityTaskWoken) {
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+/* PUBLIC FUNCTION IMPLEMENTATION ***********************************************************************************************/
+
+ReturnCode_t W5500_InitLock(void) {
+    W5500_Lock = xSemaphoreCreateBinary();
+    
+    if (W5500_Lock == NULL) {
+        return STAT_ERR;
+    }
+
+    /* Place the actual comment here */
+    /* Binary semaphores start at 0 (locked); give once to make it available */
+    xSemaphoreGive(W5500_Lock);
+    
+    return STAT_OKE;
+}
+
 EthernetW5500_t* W5500_Create(Pin_t MISO, Pin_t MOSI, Pin_t CLK, Pin_t SCS, Pin_t RST, Pin_t INT) {
     EthernetW5500_t* obj = (EthernetW5500_t*)malloc(sizeof(EthernetW5500_t));
     if (obj == NULL) return NULL;
@@ -53,7 +75,7 @@ EthernetW5500_t* W5500_Create(Pin_t MISO, Pin_t MOSI, Pin_t CLK, Pin_t SCS, Pin_
     };
     gpio_config(&in_conf);
 
-    /* configure SPI bus [cite: 110] */
+    /* configure SPI bus */
     spi_bus_config_t bus_cfg = {
         .miso_io_num = MISO, .mosi_io_num = MOSI, .sclk_io_num = CLK,
         .quadwp_io_num = -1, .quadhd_io_num = -1,
@@ -70,13 +92,14 @@ EthernetW5500_t* W5500_Create(Pin_t MISO, Pin_t MOSI, Pin_t CLK, Pin_t SCS, Pin_
     spi_bus_add_device(SPI2_HOST, &dev_cfg, &w5500_spi_handle);
     /* install ISR service and add handler for W5500 INT pin */
     gpio_install_isr_service(0);
-    gpio_isr_handler_add(obj->Pinout.INT, W5500_OnPacketHandler, (void*) obj);
+    gpio_isr_handler_add(obj->Pinout.INT, W5500_IsrHandler, (void*) obj);
+
+    /// W5500_Lock = xSemaphoreCreateBinary();
+    W5500_InitLock();
+
     return (EthernetW5500_t*) obj;
 }
 
-/// @brief Delete EthernetW5500_t object and set ptr to NULL
-/// @param Ptr Pointer to the pointer of the management object
-/// @return ReturnCode_t* Returns NULL
 ReturnCode_t W5500_Delete(EthernetW5500_t** Ptr) {
     if (Ptr != NULL && *Ptr != NULL) {
         /* release hardware resources [cite: 124] */
@@ -87,7 +110,21 @@ ReturnCode_t W5500_Delete(EthernetW5500_t** Ptr) {
     return STAT_OKE;
 }
 
-ReturnCode_t W5500_SetHeader(EthernetW5500_t* Ptr, uint8_t BlockSelBits, uint16_t RegAddr){
+ReturnCode_t W5500_IsInInterruptPhase(EthernetW5500_t* Ptr) {
+    /* Validate input pointer */
+    if (IsNull(Ptr)) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Read physical level of the INT pin; W5500 pulls this pin LOW when an interrupt occurs [cite: 1684, 2431] */
+    if (gpio_get_level(Ptr->Pinout.INT) == 0) {
+        return STAT_OKE;
+    }
+
+    return STAT_ERR;
+}
+
+ReturnCode_t W5500_SetHeader(EthernetW5500_t* Ptr, Byte_t BlockSelBits, Word_t RegAddr){
     if (IsNull(Ptr)) return STAT_ERR_NULL;
     Ptr->TxFrame.Header.AddrH       = (RegAddr & 0xFF00)>>8;
     Ptr->TxFrame.Header.AddrL       = (RegAddr & 0x00FF)>>0;
@@ -98,46 +135,46 @@ ReturnCode_t W5500_SetHeader(EthernetW5500_t* Ptr, uint8_t BlockSelBits, uint16_
     return STAT_OKE;
 }
 
-ReturnCode_t W5500_SetTxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N){
+ReturnCode_t W5500_SetTxPayload(EthernetW5500_t* Ptr, void* Payload, Dword_t N){
     if (IsNull(Ptr) || IsNull(Payload)) return STAT_ERR_NULL;
     /*Adjust for size*/
-    N = (N < 0) ? 0 : (N > 1500) ? 1500 : N;
+    N = /*(N < 0) ? 0 :*/ (N > 1500) ? 1500 : N;
     Ptr->TxFrame.Payload.Length = N;
     /*Perform transfer*/
     memcpy(Ptr->TxFrame.Payload.Byte, Payload, N);
     return STAT_OKE;
 }
 
-ReturnCode_t W5500_GetTxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N){
+ReturnCode_t W5500_GetTxPayload(EthernetW5500_t* Ptr, void* Payload, Dword_t N){
     if (IsNull(Ptr) || IsNull(Payload)) return STAT_ERR_NULL;
     /*Adjust for size*/
-    N = (N < 0) ? 0 : (N > 1500) ? 1500 : N;
+    N = /*(N < 0) ? 0 :*/ (N > 1500) ? 1500 : N;
     /*Perform transfer*/
     memcpy(Payload, Ptr->TxFrame.Payload.Byte, N);
     return STAT_OKE;
 }
 
-ReturnCode_t W5500_SetRxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N){
+ReturnCode_t W5500_SetRxPayload(EthernetW5500_t* Ptr, void* Payload, Dword_t N){
     if (IsNull(Ptr) || IsNull(Payload)) return STAT_ERR_NULL;
     /*Adjust for size*/
-    N = (N < 0) ? 0 : (N > 1500) ? 1500 : N;
+    N = /*(N < 0) ? 0 :*/ (N > 1500) ? 1500 : N;
     Ptr->RxFrame.Payload.Length = N;
     /*Perform transfer*/
     memcpy(Ptr->RxFrame.Payload.Byte, Payload, N);
     return STAT_OKE;
 }
 
-ReturnCode_t W5500_GetRxPayload(EthernetW5500_t* Ptr, void* Payload, int32_t N){
+ReturnCode_t W5500_GetRxPayload(EthernetW5500_t* Ptr, void* Payload, Dword_t N){
     if (IsNull(Ptr) || IsNull(Payload)) return STAT_ERR_NULL;
     /*Adjust for size*/
-    N = (N < 0) ? 0 : (N > 1500) ? 1500 : N;
+    N = /*(N < 0) ? 0 :*/ (N > 1500) ? 1500 : N;
     /*Perform transfer*/
     memcpy(Payload, Ptr->RxFrame.Payload.Byte, N);
     return STAT_OKE;
 }
 
-ReturnCode_t W5500_AccessNByte(EthernetW5500_t* Ptr, uint8_t nRW) {
-    int32_t N;
+ReturnCode_t W5500_AccessNByte(EthernetW5500_t* Ptr, Byte_t nRW) {
+    Dword_t N;
     if (IsNull(Ptr)) return STAT_ERR_NULL;
 
     /* Determine transaction length based on the operation type */
@@ -194,7 +231,7 @@ ReturnCode_t W5500_AccessNByte(EthernetW5500_t* Ptr, uint8_t nRW) {
     return STAT_OKE;
 }
 
-ReturnCode_t W5500_ReadNByte(EthernetW5500_t* Ptr, uint8_t* Buffer, uint16_t Len) {
+ReturnCode_t W5500_ReadNByte(EthernetW5500_t* Ptr, Byte_t* Buffer, Word_t Len) {
     if (IsNull(Ptr) || IsNull(Buffer)) return STAT_ERR_NULL;
 
     /* Configure for Variable Data Length Mode and execute transaction */
@@ -246,7 +283,7 @@ ReturnCode_t W5500_ReadQuartByte(EthernetW5500_t* Ptr) {
                           (Ptr->RxFrame.Payload.Byte[2] << 8)  |  Ptr->RxFrame.Payload.Byte[3]);
 }
 
-ReturnCode_t W5500_WriteNByte(EthernetW5500_t* Ptr, uint8_t* Data, uint16_t Len) {
+ReturnCode_t W5500_WriteNByte(EthernetW5500_t* Ptr, Byte_t* Data, Word_t Len) {
     if (IsNull(Ptr) || IsNull(Data)) return STAT_ERR_NULL;
 
     /* Copy data to internal buffer and set VDM mode */
@@ -257,7 +294,7 @@ ReturnCode_t W5500_WriteNByte(EthernetW5500_t* Ptr, uint8_t* Data, uint16_t Len)
     return W5500_AccessNByte(Ptr, eW5500_Write);
 }
 
-ReturnCode_t W5500_WriteByte(EthernetW5500_t* Ptr, uint8_t Data) {
+ReturnCode_t W5500_WriteByte(EthernetW5500_t* Ptr, Byte_t Data) {
     if (IsNull(Ptr)) return STAT_ERR_NULL;
 
     /* Place the actual comment here */
@@ -268,13 +305,13 @@ ReturnCode_t W5500_WriteByte(EthernetW5500_t* Ptr, uint8_t Data) {
     return W5500_AccessNByte(Ptr, eW5500_Write);
 }
 
-ReturnCode_t W5500_WriteDoubleByte(EthernetW5500_t* Ptr, uint16_t Data) {
+ReturnCode_t W5500_WriteDoubleByte(EthernetW5500_t* Ptr, Word_t Data) {
     if (IsNull(Ptr)) return STAT_ERR_NULL;
 
     /* Store data in Big-Endian format before transmission */
     Ptr->TxFrame.Header.OpMode = eW5500_FDM2;
-    Ptr->TxFrame.Payload.Byte[0] = (uint8_t)(Data >> 8);
-    Ptr->TxFrame.Payload.Byte[1] = (uint8_t)(Data & 0xFF);
+    Ptr->TxFrame.Payload.Byte[0] = (Byte_t)(Data >> 8);
+    Ptr->TxFrame.Payload.Byte[1] = (Byte_t)(Data & 0xFF);
     Ptr->TxFrame.Payload.Length = 2;
     
     return W5500_AccessNByte(Ptr, eW5500_Write);
@@ -285,10 +322,10 @@ ReturnCode_t W5500_WriteQuartByte(EthernetW5500_t* Ptr, uint32_t Data) {
 
     /* Store 32-bit data in Big-Endian format */
     Ptr->TxFrame.Header.OpMode = eW5500_FDM4;
-    Ptr->TxFrame.Payload.Byte[0] = (uint8_t)(Data >> 24);
-    Ptr->TxFrame.Payload.Byte[1] = (uint8_t)(Data >> 16);
-    Ptr->TxFrame.Payload.Byte[2] = (uint8_t)(Data >> 8);
-    Ptr->TxFrame.Payload.Byte[3] = (uint8_t)(Data & 0xFF);
+    Ptr->TxFrame.Payload.Byte[0] = (Byte_t)(Data >> 24);
+    Ptr->TxFrame.Payload.Byte[1] = (Byte_t)(Data >> 16);
+    Ptr->TxFrame.Payload.Byte[2] = (Byte_t)(Data >> 8);
+    Ptr->TxFrame.Payload.Byte[3] = (Byte_t)(Data & 0xFF);
     Ptr->TxFrame.Payload.Length = 4;
     
     return W5500_AccessNByte(Ptr, eW5500_Write);
@@ -299,12 +336,12 @@ ReturnCode_t W5500_WriteQuartByte(EthernetW5500_t* Ptr, uint32_t Data) {
 /// @brief Perform a true 5-byte loopback test (Header + Data)
 /// @param tx_data Pointer to 2 bytes of test data
 /// @param rx_full_frame Pointer to a 5-byte buffer to store the result
-ReturnCode_t W5500_LoopbackTest(EthernetW5500_t* Ptr, uint8_t tx_data[2], uint8_t rx_full_frame[5]) {
+ReturnCode_t W5500_LoopbackTest(EthernetW5500_t* Ptr, Byte_t tx_data[2], Byte_t rx_full_frame[5]) {
     EthernetW5500_t* obj = (EthernetW5500_t*)Ptr;
     if (obj == NULL) return STAT_ERR_NULL;
 
     /* Prepare a single 5-byte buffer for the entire transaction [cite: 40] */
-    uint8_t tx_buffer[5];
+    Byte_t tx_buffer[5];
     
     /* 3 bytes Header (Assume reading VersionReg 0x0039) */
     tx_buffer[0] = 0x00;
@@ -335,6 +372,201 @@ ReturnCode_t W5500_LoopbackTest(EthernetW5500_t* Ptr, uint8_t tx_data[2], uint8_
 
 /* COMPOSE FN *******************************************************************************************************************/
 
+/// @brief Read a byte from a specific W5500 register with thread-safety
+/// @param Ptr Pointer to the W5500 controller structure
+/// @param BLockSelNum Block select bits (e.g., Common or Socket n)
+/// @param RegAddr 16-bit register offset address
+/// @return ReturnCode_t containing the read byte, or STAT_ERR_NULL
+ReturnCode_t W5500_ReadByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Acquire the hardware lock to protect SPI transaction */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
+        result = W5500_ReadByte(Ptr);
+
+        /* Release the hardware lock */
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+/// @brief Write a byte to a specific W5500 register with thread-safety
+/// @param Ptr Pointer to the W5500 controller structure
+/// @param BLockSelNum Block select bits (e.g., Common or Socket n)
+/// @param RegAddr 16-bit register offset address
+/// @param ByteValue 8-bit value to write
+/// @return ReturnCode_t STAT_OKE if successful, or error status
+ReturnCode_t W5500_WriteByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t ByteValue) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Acquire the hardware lock to protect SPI transaction */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
+        result = W5500_WriteByte(Ptr, ByteValue);
+
+        /* Release the hardware lock */
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+/// @brief Read two bytes from a specific W5500 register with thread-safety
+/// @param Ptr Pointer to the W5500 controller structure
+/// @param BLockSelNum Block select bits (e.g., Common or Socket n)
+/// @param RegAddr 16-bit register offset address
+/// @return ReturnCode_t containing the 16-bit value, or STAT_ERR_NULL
+ReturnCode_t W5500_ReadDoubleByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Acquire the hardware lock to protect SPI transaction */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        /* Set header and execute 16-bit read */
+        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
+        result = W5500_ReadDoubleByte(Ptr);
+
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+/// @brief Write two bytes to a specific W5500 register with thread-safety
+/// @param Ptr Pointer to the W5500 controller structure
+/// @param BLockSelNum Block select bits (e.g., Common or Socket n)
+/// @param RegAddr 16-bit register offset address
+/// @param Data 16-bit value to write
+/// @return ReturnCode_t STAT_OKE if successful, or error status
+ReturnCode_t W5500_WriteDoubleByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Word_t Data) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Acquire the hardware lock to protect SPI transaction */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        /* Set header and execute 16-bit write */
+        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
+        result = W5500_WriteDoubleByte(Ptr, Data);
+
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+/// @brief Read four bytes from a specific W5500 register with thread-safety
+/// @param Ptr Pointer to the W5500 controller structure
+/// @param BLockSelNum Block select bits
+/// @param RegAddr 16-bit register offset address
+/// @return ReturnCode_t containing the 32-bit value, or STAT_ERR_NULL
+ReturnCode_t W5500_ReadQuartByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Place the actual comment here */
+    /* Acquire lock and execute 4-byte SPI read */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
+        result = W5500_ReadQuartByte(Ptr);
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+/// @brief Write four bytes to a specific W5500 register with thread-safety
+/// @param Ptr Pointer to the W5500 controller structure
+/// @param BLockSelNum Block select bits
+/// @param RegAddr 16-bit register offset address
+/// @param Data 32-bit value to write
+/// @return ReturnCode_t STAT_OKE if successful
+ReturnCode_t W5500_WriteQuartByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Dword_t Data) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Place the actual comment here */
+    /* Acquire lock and execute 4-byte SPI write */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
+        result = W5500_WriteQuartByte(Ptr, Data);
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+/// @brief Read N bytes from a specific W5500 block/address with thread-safety
+/// @param Ptr Pointer to the W5500 controller structure
+/// @param BLockSelNum Block select bits
+/// @param RegAddr 16-bit register offset address
+/// @param Buffer Destination buffer
+/// @param Len Number of bytes to read
+/// @return ReturnCode_t STAT_OKE if successful
+ReturnCode_t W5500_ReadNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t* Buffer, Word_t Len) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    if (Ptr == NULL || Buffer == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Place the actual comment here */
+    /* Lock SPI bus to read a burst of N bytes */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
+        result = W5500_ReadNByte(Ptr, Buffer, Len);
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+/// @brief Write N bytes to a specific W5500 block/address with thread-safety
+/// @param Ptr Pointer to the W5500 controller structure
+/// @param BLockSelNum Block select bits
+/// @param RegAddr 16-bit register offset address
+/// @param Data Source data buffer
+/// @param Len Number of bytes to write
+/// @return ReturnCode_t STAT_OKE if successful
+ReturnCode_t W5500_WriteNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t* Data, Word_t Len) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    if (Ptr == NULL || Data == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Place the actual comment here */
+    /* Lock SPI bus to write a burst of N bytes */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
+        result = W5500_WriteNByte(Ptr, Data, Len);
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
 /// @brief Read the hardware version code from VERSIONR (0x0039)
 /// @param Ptr Pointer to the W5500 controller structure
 /// @return STAT_OKE if successful, STAT_ERR_NULL if pointer is invalid
@@ -343,8 +575,8 @@ ReturnCode_t W5500_GetModuleVersion(EthernetW5500_t* Ptr) {
     if (obj == NULL) return STAT_ERR_NULL;
 
     /* Prepare 4-byte buffer for Read transaction (3 Header + 1 Data) */
-    uint8_t tx_buf[4] = {0x00, 0x39, 0x01, 0x00};
-    uint8_t rx_buf[4] = {0};
+    Byte_t tx_buf[4] = {0x00, 0x39, 0x01, 0x00};
+    Byte_t rx_buf[4] = {0};
 
     spi_transaction_t t = {
         .length = 8 * 4,
@@ -362,234 +594,4 @@ ReturnCode_t W5500_GetModuleVersion(EthernetW5500_t* Ptr) {
     return rx_buf[3];
 }
 
-/* UTILS ************************************************************************************************************************/
-
-/// @brief Convert a 4-byte array to an IPv4 string
-/// @param IPv4Addr Input array of 4 bytes
-/// @param IPv4Str Output buffer (minimum 16 bytes)
-/// @return ReturnCode_t STAT_OKE if successful
-ReturnCode_t ConvertByteArr2IPvToAddress(uint8_t IPv4Addr[], char IPv4Str[]) {
-    if (IPv4Addr == NULL || IPv4Str == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    /* this is a comment - format bytes into string x.x.x.x */
-    sprintf(IPv4Str, "%u.%u.%u.%u", IPv4Addr[0], IPv4Addr[1], IPv4Addr[2], IPv4Addr[3]);
-
-    return STAT_OKE;
-}
-
-/// @brief Convert an IPv4 string to a 4-byte array
-/// @param IPv4Str Input dotted-decimal string
-/// @param IPv4Addr Output array of 4 bytes
-/// @return ReturnCode_t STAT_OKE if successful
-ReturnCode_t ConvertIPv4AddressToByteArr(char IPv4Str[], uint8_t IPv4Addr[]) {
-    if (IPv4Str == NULL || IPv4Addr == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    int ip[4];
-    /* this is a comment - parse and validate 4 segments */
-    if (sscanf(IPv4Str, "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]) != 4) {
-        return STAT_ERR_INVALID_ARG;
-    }
-
-    /* assign results with casting */
-    for (int i = 0; i < 4; i++) {
-        IPv4Addr[i] = (uint8_t)ip[i];
-    }
-
-    return STAT_OKE;
-}
-
-/// @brief Convert an IPv4 string to a 64-bit integer
-/// @param IPv4Str Input dotted-decimal string
-/// @param IPv4Addr Output pointer to uint64_t
-/// @return ReturnCode_t STAT_OKE if successful
-ReturnCode_t ConvertIPv4AddressToUInt64(char IPv4Str[], uint64_t *IPv4Addr) {
-    if (IPv4Str == NULL || IPv4Addr == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    int ip[4];
-    /* parse string to temporary integers */
-    if (sscanf(IPv4Str, "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]) != 4) {
-        return STAT_ERR_INVALID_ARG;
-    }
-
-    /* this is a comment - shift and combine into 64-bit (Network Byte Order) */
-    *IPv4Addr = ((uint64_t)(uint8_t)ip[0] << 24) | 
-                ((uint64_t)(uint8_t)ip[1] << 16) | 
-                ((uint64_t)(uint8_t)ip[2] << 8)  | 
-                ((uint64_t)(uint8_t)ip[3]);
-
-    return STAT_OKE;
-}
-
-/// @brief Convert a 64-bit integer to an IPv4 string
-/// @param IPv4Addr Input 64-bit integer representing IP
-/// @param IPv4Str Output buffer (minimum 16 bytes)
-/// @return ReturnCode_t STAT_OKE if successful
-ReturnCode_t ConvertUInt64ToIPv4Address(uint64_t IPv4Addr, char IPv4Str[]) {
-    if (IPv4Str == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    /* extract bytes from integer using masking and shifting */
-    uint8_t b0 = (uint8_t)((IPv4Addr >> 24) & 0xFF);
-    uint8_t b1 = (uint8_t)((IPv4Addr >> 16) & 0xFF);
-    uint8_t b2 = (uint8_t)((IPv4Addr >> 8)  & 0xFF);
-    uint8_t b3 = (uint8_t)(IPv4Addr & 0xFF);
-
-    /* this is a comment - write bytes to string buffer */
-    sprintf(IPv4Str, "%u.%u.%u.%u", b0, b1, b2, b3);
-
-    return STAT_OKE;
-}
-
-/// @brief Convert an IPv4 string to a 32-bit integer
-/// @param IPv4Str Input dotted-decimal string
-/// @param IPv4Addr Output pointer to uint32_t
-/// @return ReturnCode_t STAT_OKE if successful
-ReturnCode_t ConvertIPv4AddressToUInt32(char IPv4Str[], uint32_t *IPv4Addr) {
-    if (IPv4Str == NULL || IPv4Addr == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    int ip[4];
-    /* parse and validate 4 segments from input string [cite: 35, 46] */
-    if (sscanf(IPv4Str, "%d.%d.%d.%d", &ip[0], &ip[1], &ip[2], &ip[3]) != 4) {
-        return STAT_ERR_INVALID_ARG;
-    }
-
-    /* combine octets into 32-bit value in Network Byte Order */
-    *IPv4Addr = ((uint32_t)(uint8_t)ip[0] << 24) | 
-                ((uint32_t)(uint8_t)ip[1] << 16) | 
-                ((uint32_t)(uint8_t)ip[2] << 8)  | 
-                ((uint32_t)(uint8_t)ip[3]);
-
-    return STAT_OKE;
-}
-
-/// @brief Convert a 32-bit integer to an IPv4 string
-/// @param IPv4Addr Input 32-bit integer representing IP
-/// @param IPv4Str Output buffer (minimum 16 bytes)
-/// @return ReturnCode_t STAT_OKE if successful
-ReturnCode_t ConvertUInt32ToIPv4Address(uint32_t IPv4Addr, char IPv4Str[]) {
-    if (IPv4Str == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    /* extract bytes via bit shifting to handle endianness [cite: 141, 142] */
-    uint8_t b0 = (uint8_t)((IPv4Addr >> 24) & 0xFF);
-    uint8_t b1 = (uint8_t)((IPv4Addr >> 16) & 0xFF);
-    uint8_t b2 = (uint8_t)((IPv4Addr >> 8)  & 0xFF);
-    uint8_t b3 = (uint8_t)(IPv4Addr & 0xFF);
-
-    /* format extracted bytes into dotted-decimal string */
-    sprintf(IPv4Str, "%u.%u.%u.%u", b0, b1, b2, b3);
-
-    return STAT_OKE;
-}
-
-/// @brief Convert IPv4 octets to a 32-bit integer in Big-endian (Network) order
-/// @param Octet0 First octet (e.g., 192)
-/// @param Octet1 Second octet (e.g., 168)
-/// @param Octet2 Third octet (e.g., 1)
-/// @param Octet3 Fourth octet (e.g., 10)
-/// @return uint32_t The packed 32-bit IP address
-uint32_t IPv4ToUint32(uint8_t Octet0, uint8_t Octet1, uint8_t Octet2, uint8_t Octet3) {
-    /* Shift octets into a 32-bit container in Big-endian order */
-    return ((uint32_t)Octet0 << 24) | 
-           ((uint32_t)Octet1 << 16) | 
-           ((uint32_t)Octet2 << 8)  | 
-           ((uint32_t)Octet3);
-}
-
-/// @brief Convert 6 MAC address octets to a 64-bit integer
-/// @param Octet0 High byte of MAC (Most Significant Byte)
-/// @param Octet1 Second byte
-/// @param Octet2 Third byte
-/// @param Octet3 Fourth byte
-/// @param Octet4 Fifth byte
-/// @param Octet5 Low byte of MAC (Least Significant Byte)
-/// @return uint64_t The packed MAC address
-uint64_t MACToUint64(uint8_t Octet0, uint8_t Octet1, uint8_t Octet2, uint8_t Octet3, uint8_t Octet4, uint8_t Octet5) {
-    /* Pack 48-bit MAC address into a 64-bit container in Big-endian order */
-    return ((uint64_t)Octet0 << 40) |
-           ((uint64_t)Octet1 << 32) |
-           ((uint64_t)Octet2 << 24) |
-           ((uint64_t)Octet3 << 16) |
-           ((uint64_t)Octet4 << 8)  |
-           ((uint64_t)Octet5);
-}
-
-/// @brief Convert a byte array to a 32-bit unsigned integer (Big Endian)
-/// @param ByteArr Pointer to the source byte array
-/// @param Size Number of bytes to convert (max 4)
-/// @return The converted 32-bit unsigned integer
-uint32_t ConvertByteArrayToInt32_BigEndian(const uint8_t* ByteArr, uint8_t Size) {
-    /* Initialize result and set processing limit to 4 bytes */
-    uint32_t result = 0;
-    uint8_t limit = (Size > 4) ? 4 : Size;
-
-    /* Shift and OR bytes into integer starting from most significant byte */
-    for (uint8_t i = 0; i < limit; i++) {
-        result = (result << 8) | ByteArr[i];
-    }
-
-    return result;
-}
-
-/// @brief Convert a byte array to a 64-bit unsigned integer (Big Endian)
-/// @param ByteArr Pointer to the source byte array
-/// @param Size Number of bytes to convert (max 8)
-/// @return The converted 64-bit unsigned integer
-uint64_t ConvertByteArrayToInt64_BigEndian(const uint8_t* ByteArr, uint8_t Size) {
-    /* Initialize result and set processing limit to 8 bytes */
-    uint64_t result = 0;
-    uint8_t limit = (Size > 8) ? 8 : Size;
-
-    /* Shift and OR bytes into integer starting from most significant byte */
-    for (uint8_t i = 0; i < limit; i++) {
-        result = (result << 8) | ByteArr[i];
-    }
-
-    return result;
-}
-
-/// @brief Convert a byte array to a 32-bit unsigned integer (Little Endian)
-/// @param ByteArr Pointer to the source byte array
-/// @param Size Number of bytes to convert (max 4)
-/// @return The converted 32-bit unsigned integer
-uint32_t ConvertByteArrayToInt32_LittleEndian(const uint8_t* ByteArr, uint8_t Size) {
-    /* Initialize result and set processing limit to 4 bytes */
-    uint32_t result = 0;
-    uint8_t limit = (Size > 4) ? 4 : Size;
-
-    /* Shift and OR bytes into integer starting from least significant byte */
-    for (uint8_t i = 0; i < limit; i++) {
-        result |= ((uint32_t)ByteArr[i] << (8 * i));
-    }
-
-    return result;
-}
-
-/// @brief Convert a byte array to a 64-bit unsigned integer (Little Endian)
-/// @param ByteArr Pointer to the source byte array
-/// @param Size Number of bytes to convert (max 8)
-/// @return The converted 64-bit unsigned integer
-uint64_t ConvertByteArrayToInt64_LittleEndian(const uint8_t* ByteArr, uint8_t Size) {
-    /* Initialize result and set processing limit to 8 bytes */
-    uint64_t result = 0;
-    uint8_t limit = (Size > 8) ? 8 : Size;
-
-    /* Shift and OR bytes into integer starting from least significant byte */
-    for (uint8_t i = 0; i < limit; i++) {
-        result |= ((uint64_t)ByteArr[i] << (8 * i));
-    }
-
-    return result;
-}
-
-/* EOF *******************************************************************************************************************/
+/* EOF **************************************************************************************************************************/

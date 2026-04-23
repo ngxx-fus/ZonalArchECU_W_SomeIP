@@ -1,6 +1,7 @@
 # @brief Collect all source files from subdirectories
 set(srcs
     "EthernetW5500/EthernetW5500.c"
+    "EthernetW5500/Network.c"
     "EthernetW5500/Module.c"
     "UltraSonic/UltraSonic.c"
     "HBridge/Module.c"

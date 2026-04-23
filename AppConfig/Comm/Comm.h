@@ -5,15 +5,20 @@
 extern "C" {
 #endif
 
-#ifdef PRINT_HEADER_COMPILE_MESSAGE
-#pragma message ("AppConfig/Comm.h")
-#endif
-
 #include <stdint.h>
 #include <stdlib.h>
 
-/// @brief Type of a GPIO
+/// @brief 8-bit unsigned integer type
 typedef uint8_t Byte_t;
+
+/// @brief 16-bit unsigned integer type
+typedef uint16_t Word_t;
+
+/// @brief 32-bit unsigned integer type
+typedef uint32_t Dword_t;
+
+/// @brief 64-bit unsigned integer type
+typedef uint64_t Qword_t;
 
 /// GENERATED SECTION | BEGIN /////////////////////////////////////////////////
 #define GW_IP_ADDR_STR "10.0.0.1"
