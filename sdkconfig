@@ -813,16 +813,27 @@ CONFIG_COMPILER_CXX_GLIBCXX_CONSTEXPR_NO_CHANGE=y
 #
 
 #
-# BLE Log
+# BT Logs
 #
-# default:
-# CONFIG_BLE_LOG_ENABLED is not set
-# end of BLE Log
+
+#
+# Log Sources
+#
+# end of Log Sources
 
 # default:
-# CONFIG_BT_BLE_LOG_SPI_OUT_ENABLED is not set
+# CONFIG_BT_LOG_CRITICAL_ONLY is not set
 # default:
-# CONFIG_BT_BLE_LOG_UHCI_OUT_ENABLED is not set
+# CONFIG_BLE_LOG_ENABLED is not set
+
+#
+# Legacy SPI Log Output (Deprecated - use BT Log Async Output instead)
+#
+# default:
+# CONFIG_BT_BLE_LOG_SPI_OUT_ENABLED is not set
+# end of Legacy SPI Log Output (Deprecated - use BT Log Async Output instead)
+# end of BT Logs
+
 # default:
 # CONFIG_BT_LE_USED_MEM_STATISTICS_ENABLED is not set
 # end of Common Options

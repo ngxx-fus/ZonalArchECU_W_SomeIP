@@ -4,6 +4,7 @@ set(srcs
     "EthernetW5500/Network.c"
     "EthernetW5500/Module.c"
     "UltraSonic/UltraSonic.c"
+    "UltraSonic/Module.c"
     "HBridge/Module.c"
     "HBridge/HBridge.c"
     "Dummy/Dummy.c"

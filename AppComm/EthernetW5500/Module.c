@@ -107,10 +107,11 @@ static void IRAM_ATTR W5500_OnPacketHandler_Legacy(void* arg) {
     // xSemaphoreGiveFromISR(EthLock, NULL);
 }
 
+
 /// @brief Initialize W5500 network interface for MACRAW and ICMP
 /// @param Eth Pointer to the Ethernet W5500 controller structure
 /// @return STAT_OKE upon successful initialization
-ReturnCode_t EthernetAdapterCtl_Init(EthernetW5500_t * Eth) {
+ReturnCode_t EthernetAdapterCtl_Init(EthernetW5500_t * Eth) { 
     /* Initialize W5500 common registers and network parameters */
     SysEntry("EthernetAdapterCtl_Init");
     uint64_t Data;
@@ -119,14 +120,17 @@ ReturnCode_t EthernetAdapterCtl_Init(EthernetW5500_t * Eth) {
     W5500_SetHeader(Eth, eBSB_CommonRegister, eMR); W5500_WriteByte(Eth, 0x80);
 
     /* Configure Gateway Address */
-    W5500_SetHeader(Eth, eBSB_CommonRegister, eGAR0); W5500_WriteQuartByte(Eth, ConvertByteArrayToInt32_BigEndian(GW_IP_ADDR, 4));
+    W5500_WriteQuartByteReg(Eth, eBSB_CommonRegister, eGAR0, ConvertByteArrayToInt32_BigEndian(GW_IP_ADDR, 4));
+    SysLog("EthernetAdapterCtl_Init(...): GATEWAY IP=%X", W5500_ReadQuartByteReg(Eth, eBSB_CommonRegister, eGAR0));
 
     /* Configure Subnet Mask */
-    W5500_SetHeader(Eth, eBSB_CommonRegister, eSUBR0); W5500_WriteQuartByte(Eth, ConvertByteArrayToInt32_BigEndian(SUBNET_MASK, 4));
+    W5500_WriteQuartByteReg(Eth, eBSB_CommonRegister, eSUBR0, ConvertByteArrayToInt32_BigEndian(SUBNET_MASK, 4));
+    SysLog("EthernetAdapterCtl_Init(...): SUBNET MASK=%X", W5500_ReadQuartByteReg(Eth, eBSB_CommonRegister, eSUBR0));
 
     /* Configure Source IP Address */
-    W5500_SetHeader(Eth, eBSB_CommonRegister, eSIPR0); W5500_WriteQuartByte(Eth, ConvertByteArrayToInt32_BigEndian(SRC_IP_ADDR, 4));
-    
+    W5500_WriteQuartByteReg(Eth, eBSB_CommonRegister, eSIPR0, ConvertByteArrayToInt32_BigEndian(SRC_IP_ADDR, 4));
+    SysLog("EthernetAdapterCtl_Init(...): SOURCE IP=%X", W5500_ReadQuartByteReg(Eth, eBSB_CommonRegister, eSIPR0));
+
     /* Configure Hardware MAC Address (Hardware auto-replies to ARP using this) */
     W5500_SetHeader(Eth, eBSB_CommonRegister, eSHAR0); Data = ConvertByteArrayToInt64_BigEndian(SRC_MAC_ADDR, 6); W5500_WriteNByte(Eth, (void*) &Data, 6);
 
@@ -167,6 +171,8 @@ ReturnCode_t EthernetAdapterCtl_Init(EthernetW5500_t * Eth) {
     SysExit("EthernetAdapterCtl_Init");
     return STAT_OKE;
 }
+
+ 
 
 
 /* INTERNAL TASK **********************************************************************************************************/

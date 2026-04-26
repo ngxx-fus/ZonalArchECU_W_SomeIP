@@ -52,7 +52,7 @@ if __name__ == "__main__":
     log(f"Available interfaces: {get_if_list()}")
     
     # Vui lòng thay 'eth0' bằng interface thực tế trên máy Linux của bạn
-    NETWORK_IFACE = "enxe466e5984fd7" 
+    NETWORK_IFACE = "wlo1" 
     
     log(f"Starting custom frame transmission to {DEST_MAC} on {NETWORK_IFACE}...")
     send_custom_ether_frames(DEST_MAC, NETWORK_IFACE)

@@ -21,10 +21,10 @@ typedef uint32_t Dword_t;
 typedef uint64_t Qword_t;
 
 /// GENERATED SECTION | BEGIN /////////////////////////////////////////////////
-#define GW_IP_ADDR_STR "10.0.0.1"
+#define GW_IP_ADDR_STR "192.168.1.1"
 #define SRC_MAC_ADDR_STR "00:08:DC:01:02:03"
 #define SUBNET_MASK_STR "255.255.255.0"
-#define SRC_IP_ADDR_STR "10.0.0.19"
+#define SRC_IP_ADDR_STR "192.168.1.254"
 #define SOMEIP_PORT_STR "42"
 extern Byte_t GW_IP_ADDR[];
 extern Byte_t SRC_MAC_ADDR[];

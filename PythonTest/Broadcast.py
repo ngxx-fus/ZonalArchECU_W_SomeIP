@@ -39,7 +39,7 @@ def get_mac_address(target_ip):
         return None
 
 if __name__ == "__main__":
-    TARGET_IP = "10.0.0.19"
+    TARGET_IP = "192.168.1.254"
     
     log(f"Starting ARP discovery for {TARGET_IP}...")
     
