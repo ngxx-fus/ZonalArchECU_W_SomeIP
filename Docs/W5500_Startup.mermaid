@@ -1,34 +1,67 @@
 sequenceDiagram
-    autonumber
-    participant ESP as ESP32 (Host)
-    participant W5500 as W5500 (Slave)
+    title W5500 System Boot Sequence
 
-    Note over ESP, W5500: 1. Network Information Initialization (Common Registers)
+    participant CPU as CPU / app_main
+    participant CTL as TaskW5500Ctl (W5500CommCtl)
+    participant COMM as TaskW5500Comm
+    participant SPI as SPI Driver
+    participant W5500 as W5500 (Hardware)
+    participant ISR as ISR (GPIO INT)
+
+    Note over CPU:
+    CPU ->> CPU: app_main()
+    CPU ->> CPU: AppInit()
     
-    ESP->>W5500: Software Reset (MR) | Header: [00 00 05] | Payload: [80]
-    ESP->>W5500: Set Gateway (GAR) | Header: [00 01 07] | Payload: [0A 00 00 01]
-    ESP->>W5500: Set Subnet Mask (SUBR) | Header: [00 05 07] | Payload: [FF FF FF 00]
-    ESP->>W5500: Set Source IP (SIPR) | Header: [00 0F 07] | Payload: [0A 00 00 13]
-    ESP->>W5500: Set Source MAC (SHAR) | Header: [00 09 04] | Payload: [00 08 DC 01 02 03]
+    Note right of CPU: Create Control Task
+    CPU ->> CTL: xTaskCreate(W5500CommCtl)
 
-    Note over ESP, W5500: 2. Interrupt Setup & RAM Allocation (4KB per Buffer)
-
-    ESP->>W5500: Enable S0 Int in SIMR | Header: [00 18 05] | Payload: [01]
-    ESP->>W5500: Set S0 RX Buffer to 4KB | Header: [00 1E 0D] | Payload: [04]
-    ESP->>W5500: Set S0 TX Buffer to 4KB | Header: [00 1F 0D] | Payload: [04]
-    ESP->>W5500: Enable all S0 sub-interrupts (Sn_IMR) | Header: [00 2C 0D] | Payload: [FF]
-
-    Note over ESP, W5500: 3. Open UDP Protocol for Socket 0
-
-    ESP->>W5500: Set Sn_MR to UDP Mode (0x02) | Header: [00 00 0D] | Payload: [02]
-    ESP->>W5500: Set Local Port to 5000 (0x1388) | Header: [00 04 0E] | Payload: [13 88]
-    ESP->>W5500: Execute OPEN Command | Header: [00 01 0D] | Payload: [01]
+    activate CTL
+    CTL ->> CTL: RxedPacket_Init()
+    Note right of CTL: Create RxedPacket_Lock Mutex
     
-    W5500-->>ESP: Read Sn_SR (Expect SOCK_UDP: 0x22) | Header: [00 03 09] | Payload: [22]
+    CTL ->> CTL: W5500_Create()
+    CTL ->> SPI: spi_bus_initialize + spi_bus_add_device
+    CTL ->> W5500: GPIO SCS=1, RST=1
+    CTL ->> ISR: gpio_isr_handler_add(INT, W5500_IsrHandler)
+    CTL ->> CTL: W5500_InitLock()
+    Note right of CTL: Create W5500_Lock Mutex
 
-    Note over ESP, W5500: UDP Communication Ready!
+    CTL ->> CTL: W5500CommCtl_Init()
+    
+    Note over CTL, W5500: --- Phase A: Reset & Sanity Check ---
+    CTL ->> SPI: Write MR (0x0000, Common) = 0x80
+    SPI ->> W5500: [00 00] [04] [80]
+    W5500 -->> SPI: Hardware Reset Ack
+    
+    CTL ->> SPI: Read VERSIONR (0x0039, Common)
+    SPI ->> W5500: [00 39] [00]
+    W5500 -->> SPI: Return 0x04 (W5500 Version)
+    SPI -->> CTL: Confirm HW Supported
 
-    loop Routine Check
-        ESP->>W5500: Read VERSIONR (0x0039) | Header: [00 39 01] | Payload: [00]
-        W5500-->>ESP: Confirm Hardware Version | Header: [00 39 01] | Payload: [04]
-    end
+    Note over CTL, W5500: --- Phase B: Network Config ---
+    CTL ->> SPI: Write GAR (Gateway), SUBR (Subnet), SIPR (IP), SHAR (MAC)
+    SPI ->> W5500: Burst Write Common Regs
+
+    Note over CTL, W5500: --- Phase C: Interrupt & Socket Setup ---
+    CTL ->> SPI: Write IMR=0x81, INTLEVEL=0x03E8
+    CTL ->> SPI: Clear Ghost IR/SIR (Read then Write back)
+    CTL ->> SPI: Write Sn_IMR=0x14 (RECV & SEND_OK)
+    CTL ->> SPI: Write Sn_MR=0x04 (MACRAW)
+    CTL ->> SPI: Write Sn_CR=0x01 (OPEN)
+    W5500 -->> SPI: Socket 0 Status -> SOCK_MACRAW
+    CTL ->> SPI: Write SIMR=0x01, Sn_RXBUF_SIZE=0x08 (8KB)
+
+    Note right of CTL: Create Communication Task
+    CTL ->> COMM: xTaskCreate(W5500_TaskComm)
+    CTL ->> CTL: Save W5500CommCtl_TaskHandler
+    
+    activate COMM
+    Note over COMM: TaskW5500Comm Startup
+    COMM ->> CTL: xTaskNotifyGive(W5500CommCtl_TaskHandler)
+    CTL -->> COMM: Task Notified
+    COMM ->> COMM: ulTaskNotifyTake(wait forever)
+    deactivate COMM
+    
+    Note over CTL: Join forever loop
+    CTL ->> CTL: ulTaskNotifyTake(pdMS_TO_TICKS(5000))
+    deactivate CTL

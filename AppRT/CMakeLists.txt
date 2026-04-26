@@ -1,0 +1,14 @@
+idf_component_register(
+    SRCS
+        "SOMEIP/Service.c"
+        "StartUp/Service.c"
+    INCLUDE_DIRS
+        "."
+        "SOMEIP/"
+        "StartUp/"
+    REQUIRES 
+        AppUtils
+        AppConfig
+        AppESPWrap
+        AppComm
+)

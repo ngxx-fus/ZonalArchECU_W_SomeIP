@@ -23,6 +23,7 @@ extern "C" {
 #include "./ReturnType.h"
 #include "./FlagControl.h"
 #include "./Loop.h"
+#include "./Deque.h"
 
 #ifdef __cplusplus
 }

@@ -3,9 +3,12 @@
 
 /* GENERIC PAYLOAD UTILS *********************************************************************************************************/
 
-void NewGenericPayload(GenericPayload_t* GP_Ptr) {
+void NewGenericPayload(GenericPayload_t* GP_Ptr, uint16_t Size) {
+    /* Set new size for payload data */
+    GP_Ptr->Size = Size;
     /* Allocate memory for payload data */
     if (GP_Ptr->Size > 0) {
+        
         GP_Ptr->Ptr = malloc(GP_Ptr->Size);
         
         /* Ensure pointer is null if allocation fails */
@@ -267,6 +270,20 @@ uint64_t ConvertByteArrayToInt64_LittleEndian(const uint8_t* ByteArr, uint8_t Si
     }
 
     return result;
+}
+
+/// @brief Reverse the byte order of an array in-place (Endianness conversion)
+/// @param Arr Generic pointer to the data array
+/// @param Size Total number of bytes to reverse
+void ReverseByteEndian(GenericPtr_t Arr, EthSize_t Size){
+    Byte_t      TempByte;
+    EthSize_t   i;
+    if(Size < 2 || Arr.Byte == NULL) return;
+    for(i = 0; i < (Size>>1); ++i){
+        TempByte              =   Arr.Byte[0+i];
+        Arr.Byte[0+i]         =   Arr.Byte[(Size-1)-i];
+        Arr.Byte[(Size-1)-i]  =   TempByte;
+    }
 }
 
 /* EOF **************************************************************************************************************************/

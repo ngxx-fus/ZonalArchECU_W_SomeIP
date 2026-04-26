@@ -8,6 +8,7 @@ set(
     "AppUtils"
     "AppConfig"
     "AppComm"
+    "AppRT"
 )
 
 

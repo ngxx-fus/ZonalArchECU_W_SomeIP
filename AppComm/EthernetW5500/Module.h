@@ -2,10 +2,11 @@
 #define __ETHERNET_W5500_MODULE_H__
 
 #include "EthernetW5500.h"
+#include "RxedPacketQueue.h"
 
-extern EthernetW5500_t *    Eth;
 extern SemaphoreHandle_t    EthLock;
-
+extern GenericPayload_t     RxedPacket[];
+extern TaskHandle_t         W5500CommCtl_TaskHandler;
 /*Module public APIs*/
 
 
@@ -16,6 +17,6 @@ extern SemaphoreHandle_t    EthLock;
 // ReturnCode_t EthSetIPv4SourcePort(uint16_t IPv4Port);
 
 /*Runtime service*/
-void EthernetAdapterCtl(void* arg);
+void W5500CommCtl(void* arg);
 
 #endif ///__ETHERNET_W5500_MODULE_H__
