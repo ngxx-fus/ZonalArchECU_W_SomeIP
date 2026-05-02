@@ -107,10 +107,10 @@ typedef union __attribute__((packed)) EthernetW5500_t {
 /*IsrHandler function pointer ****************************************************************************************************/
 
 /* W5500 Isr Tracking task handle*/
-extern TaskHandle_t W5500_IsrTracking_TaskHandle;
+extern TaskHandle_t W5500_TaskComm_TaskHandler;
 
 /* W5500 Isr Tracking task function pointer */
-extern void (*W5500_IsrTracking_Function)(void*);
+extern void (*W5500_TaskComming_Function)(void*);
 
 /*Public API *********************************************************************************************************************/
 
@@ -288,6 +288,11 @@ ReturnCode_t W5500_ReadNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t
 /// @param Len Number of bytes to write
 /// @return ReturnCode_t STAT_OKE if successful
 ReturnCode_t W5500_WriteNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t* Data, Word_t Len);
+
+/// @brief Forcefully clears the Socket 0 receive buffer by syncing pointers
+/// @param Ptr Pointer to the W5500 controller structure
+/// @return ReturnCode_t STAT_OKE if successful, or error code
+ReturnCode_t W5500_ClearRxBuffer(EthernetW5500_t* Ptr);
 
 /// @brief Read the hardware version code from VERSIONR (0x0039)
 /// @param Ptr Pointer to the W5500 controller structure

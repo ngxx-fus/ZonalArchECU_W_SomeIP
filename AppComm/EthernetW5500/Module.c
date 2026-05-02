@@ -1,202 +1,49 @@
 #include "Module.h"
+#include "RxedPacketQueue.h"
 
-EthernetW5500_t *    Eth;
-SemaphoreHandle_t    EthLock;
+EthernetW5500_t *   Eth;
+SemaphoreHandle_t   EthLock;
 
-/// @brief Handle incoming interrupts from W5500 for MACRAW and ICMP with semaphore protection
-/// @param arg Pointer to the EthernetW5500_t structure
-/// @return void
-static void IRAM_ATTR W5500_OnPacketHandler_Legacy(void* arg) {
-    /* Attempt to acquire the hardware lock; Note: Use Binary Semaphore for ISR compatibility */
-    // if (xSemaphoreTakeFromISR(EthLock, NULL) != pdTRUE) {
-        //     return;
-        // }
-        
-    int Attempt;
-    uint16_t TempRegVal;
-    EthernetW5500_t* Ptr = (EthernetW5500_t*)(arg);
-    
-    SysEntry("W5500_OnPacketHandler(...)");
+EthernetW5500_t *   Eth;
+TaskHandle_t        W5500CommCtl_TaskHandler;
 
-    
-    Attempt = 0;
-    while ((Attempt++ < 1) && W5500_IsInInterruptPhase(Ptr) == STAT_OKE) {
-        
-        W5500_SetHeader(Ptr, eBSB_CommonRegister, 0x0015); uint8_t ir = W5500_ReadByte(Ptr);
-        
-        /* Read Socket 0 Interrupt Register */
-        W5500_SetHeader(Ptr, eBSB_Socket0Register, 0x0002); uint8_t s0_ir = W5500_ReadByte(Ptr);
-        
-        SysLog("W5500_OnPacketHandler(...): Attempt=%d IR=%X S0_IR=%X", Attempt, ir, s0_ir);
-
-        /* Process MACRAW Receive Interrupt on Socket 0 */
-        if (s0_ir & 0x04) {
-            uint16_t rx_rd;
-            uint16_t packet_size;
-            uint8_t size_header[2];
-            
-            /* Locate and read 2-byte size header containing the total frame length */
-            W5500_SetHeader(Ptr, eBSB_Socket0Register, 0x0028); rx_rd = W5500_ReadDoubleByte(Ptr);
-            W5500_SetHeader(Ptr, eBSB_Socket0RxBuffer, rx_rd); W5500_ReadNByte(Ptr, size_header, 2);
-            packet_size = (size_header[0] << 8) | size_header[1];
-            
-            /* Calculate actual frame length and extract payload into internal buffer */
-            uint16_t frame_len = packet_size - 2;
-            if (frame_len > 0) {
-                uint16_t read_len = (frame_len > 1514) ? 1514 : frame_len;
-                W5500_SetHeader(Ptr, eBSB_Socket0RxBuffer, rx_rd + 2); W5500_ReadNByte(Ptr, Ptr->RxFrame.Payload.Byte, read_len);
-                
-                SysLog("MACRAW Received! Size: %u bytes", frame_len);
-                SysLog("Dest MAC: %02X:%02X:%02X:%02X:%02X:%02X", Ptr->RxFrame.Payload.Byte[0], Ptr->RxFrame.Payload.Byte[1], Ptr->RxFrame.Payload.Byte[2], Ptr->RxFrame.Payload.Byte[3], Ptr->RxFrame.Payload.Byte[4], Ptr->RxFrame.Payload.Byte[5]);
-                SysLog("Src MAC: %02X:%02X:%02X:%02X:%02X:%02X", Ptr->RxFrame.Payload.Byte[6], Ptr->RxFrame.Payload.Byte[7], Ptr->RxFrame.Payload.Byte[8], Ptr->RxFrame.Payload.Byte[9], Ptr->RxFrame.Payload.Byte[10], Ptr->RxFrame.Payload.Byte[11]);
-                
-                /* Iterate through raw payload and log characters or hex values for debugging */
-                for (uint16_t i = 0; i < read_len; i += 16) {
-                    char line_buf[128];
-                    int pos = 0;
-                    /* Add offset address at the beginning of the line */
-                    pos += sprintf(line_buf + pos, "%04X: ", i);
-                    
-                    for (int j = 0; j < 16 && (i + j) < read_len; j++) {
-                        uint8_t byte = Ptr->RxFrame.Payload.Byte[i + j];
-                        /* Filter printable ASCII characters vs non-printable hex */
-                        if (byte >= 0x20 && byte <= 0x7E) {
-                            pos += sprintf(line_buf + pos, " %c ", byte);
-                        }
-                        else {
-                            pos += sprintf(line_buf + pos, "%02X ", byte);
-                        }
-                    }
-                    SysLog("%s", line_buf);
-                }
-            }
-            
-            /* Update the RX Read Pointer and notify W5500 with RECV command */
-            rx_rd += packet_size;
-            W5500_SetHeader(Ptr, eBSB_Socket0Register, 0x0028); W5500_WriteDoubleByte(Ptr, rx_rd);
-            W5500_SetHeader(Ptr, eBSB_Socket0Register, 0x0001); W5500_WriteByte(Ptr, 0x40);
-        }
-
-        /* Process MACRAW Send OK Interrupt */
-        if (s0_ir & 0x10) {
-            SysLog("W5500_OnPacketHandler(...): MACRAW Data Sent");
-        }
-
-        /* Clear Socket 0 interrupts by writing '1' to set bits */
-        if (0xFF | s0_ir) {
-            W5500_SetHeader(Ptr, eBSB_Socket0Register, 0x0002); W5500_WriteByte(Ptr, 0xFF);
-        }
-
-        // /* Read and process Socket 7 Interrupt Register */
-        // W5500_SetHeader(Ptr, eW5500_SelectsSocket7Register, 0x0002); uint8_t s7_ir = W5500_ReadByte(Ptr);
-
-        
-        // /* Clear Socket 7 interrupts */
-        // if (0xFF | s7_ir) {
-        //     SysLog("W5500_OnPacketHandler(...): ICMP Interrupt on S7");
-        //     W5500_SetHeader(Ptr, eW5500_SelectsSocket7Register, 0x0002); W5500_WriteByte(Ptr, 0xFF);
-        // }
-
-        /* Clear Global Interrupt status bit by writing '1' */
-        if (ir) {
-            W5500_SetHeader(Ptr, eBSB_CommonRegister, 0x0015); W5500_WriteByte(Ptr, ir);
-        }
-    }
-
-    // /* Release the hardware lock */
-    // xSemaphoreGiveFromISR(EthLock, NULL);
-}
-
-
-/// @brief Initialize W5500 network interface for MACRAW and ICMP
-/// @param Eth Pointer to the Ethernet W5500 controller structure
-/// @return STAT_OKE upon successful initialization
-ReturnCode_t EthernetAdapterCtl_Init(EthernetW5500_t * Eth) { 
-    /* Initialize W5500 common registers and network parameters */
-    SysEntry("EthernetAdapterCtl_Init");
-    uint64_t Data;
-
-    /* Reset device and set mode register */
-    W5500_SetHeader(Eth, eBSB_CommonRegister, eMR); W5500_WriteByte(Eth, 0x80);
-
-    /* Configure Gateway Address */
-    W5500_WriteQuartByteReg(Eth, eBSB_CommonRegister, eGAR0, ConvertByteArrayToInt32_BigEndian(GW_IP_ADDR, 4));
-    SysLog("EthernetAdapterCtl_Init(...): GATEWAY IP=%X", W5500_ReadQuartByteReg(Eth, eBSB_CommonRegister, eGAR0));
-
-    /* Configure Subnet Mask */
-    W5500_WriteQuartByteReg(Eth, eBSB_CommonRegister, eSUBR0, ConvertByteArrayToInt32_BigEndian(SUBNET_MASK, 4));
-    SysLog("EthernetAdapterCtl_Init(...): SUBNET MASK=%X", W5500_ReadQuartByteReg(Eth, eBSB_CommonRegister, eSUBR0));
-
-    /* Configure Source IP Address */
-    W5500_WriteQuartByteReg(Eth, eBSB_CommonRegister, eSIPR0, ConvertByteArrayToInt32_BigEndian(SRC_IP_ADDR, 4));
-    SysLog("EthernetAdapterCtl_Init(...): SOURCE IP=%X", W5500_ReadQuartByteReg(Eth, eBSB_CommonRegister, eSIPR0));
-
-    /* Configure Hardware MAC Address (Hardware auto-replies to ARP using this) */
-    W5500_SetHeader(Eth, eBSB_CommonRegister, eSHAR0); Data = ConvertByteArrayToInt64_BigEndian(SRC_MAC_ADDR, 6); W5500_WriteNByte(Eth, (void*) &Data, 6);
-
-    /* Enable Socket 0 and Socket 7 global interrupt in SIMR */
-    W5500_SetHeader(Eth, eBSB_CommonRegister, eIMR); W5500_WriteByte(Eth, 0x81);
-
-    /* Configure Interrupt Assert Wait Time (INTLEVEL) to prevent missed edge interrupts */
-    W5500_SetHeader(Eth, eBSB_CommonRegister, eINTLEVEL0); W5500_WriteDoubleByte(Eth, 0x03E8);
-
-    /* Configure Global Interrupt Mask (IMR) */
-    /* Enable IP Conflict (0x80) and Destination Unreachable (0x10) interrupts */
-    W5500_SetHeader(Eth, eBSB_CommonRegister, 0x0016);  W5500_WriteByte(Eth, 0x90); 
-
-    /* Clear any existing ghost interrupts in IR and SIR (Write 1 to clear) */
-    W5500_SetHeader(Eth, eBSB_CommonRegister, 0x0015); 
-    uint8_t dummy_ir = W5500_ReadByte(Eth); 
-    W5500_WriteByte(Eth, dummy_ir);
-
-    W5500_SetHeader(Eth, eBSB_CommonRegister, 0x0017); 
-    uint8_t dummy_sir = W5500_ReadByte(Eth);
-    W5500_WriteByte(Eth, dummy_sir);
-
-    /* Configure Socket 0 for MACRAW */
-    SysLog("EthernetAdapterCtl(...): Configure Socket 0 for MACRAW");
-    W5500_SetHeader(Eth, eBSB_Socket0Register, 0x002C); W5500_WriteByte(Eth, 0x14); /* Sn_IMR: RECV & SEND_OK */
-    W5500_SetHeader(Eth, eBSB_Socket0Register, 0x0000); W5500_WriteByte(Eth, 0x04); /* Sn_MR: MACRAW */
-    W5500_SetHeader(Eth, eBSB_Socket0Register, 0x0001); W5500_WriteByte(Eth, 0x01); /* Sn_CR: OPEN */
-
-    W5500_WriteByteReg(Eth, eBSB_CommonRegister, eSIMR, 0x01);
-    W5500_WriteByteReg(Eth, eBSB_Socket0Register, eSn_RXBUF_SIZE, 0x08);
-
-    /* Configure Socket 7 for Ping (ICMP) */
-    // SysLog("EthernetAdapterCtl(...): Configure Socket 7 for ICMP");
-    // W5500_SetHeader(Eth, eW5500_SelectsSocket7Register, 0x0014); W5500_WriteByte(Eth, 0x01); /* Sn_PROTO: ICMP */
-    // W5500_SetHeader(Eth, eW5500_SelectsSocket7Register, 0x0000); W5500_WriteByte(Eth, 0x03); /* Sn_MR: IPRAW */
-    // W5500_SetHeader(Eth, eW5500_SelectsSocket7Register, 0x0001); W5500_WriteByte(Eth, 0x01); /* Sn_CR: OPEN */
-
-    SysExit("EthernetAdapterCtl_Init");
-    return STAT_OKE;
-}
-
- 
-
+GenericDeque_t  *   TxDeque;
+GenericDeque_t  *   RxDeque;
 
 /* INTERNAL TASK **********************************************************************************************************/
 
-/// @brief Log the received MACRAW frame details and hex dump (8 bytes per row)
-/// @param Ptr Pointer to the W5500 controller structure
-/// @param Len Length of the payload to print
-static void W5500_LogFrame(EthernetW5500_t* Ptr, Word_t Len) {
-    
-    /* Log basic frame info and MAC addresses */
-    SysLog("MACRAW Received! Size: %u bytes", Len);
-    SysLog("Dest MAC: %02X:%02X:%02X:%02X:%02X:%02X", Ptr->RxFrame.Payload.Byte[0], Ptr->RxFrame.Payload.Byte[1], Ptr->RxFrame.Payload.Byte[2], Ptr->RxFrame.Payload.Byte[3], Ptr->RxFrame.Payload.Byte[4], Ptr->RxFrame.Payload.Byte[5]);
-    SysLog("Src MAC: %02X:%02X:%02X:%02X:%02X:%02X", Ptr->RxFrame.Payload.Byte[6], Ptr->RxFrame.Payload.Byte[7], Ptr->RxFrame.Payload.Byte[8], Ptr->RxFrame.Payload.Byte[9], Ptr->RxFrame.Payload.Byte[10], Ptr->RxFrame.Payload.Byte[11]);
+/// @brief Log the Ethernet frame details and hex dump (8 bytes per row)
+/// @param Data Pointer to the payload buffer
+/// @param Size Length of the data to print
+/// @param SrcMAC Pointer to the 6-byte source MAC address (can be NULL)
+/// @param DstMAC Pointer to the 6-byte destination MAC address (can be NULL)
+static void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, GenericPtr_t DstMAC) {
+    SysLog("W5500_LogFrame");
 
+    Byte_t* pData = Data.UInt8;
     
-    /* Process payload in 8-byte segments */
-    for (Word_t i = 0; i < Len; i += 8) {
+    /* Log frame summary and check if MAC address pointers are valid before printing */
+    SysLog("W5500_LogFrame(...) : Ethernet Frame Log | Size: %u bytes", Size);
+
+    if (DstMAC.Byte != NULL) {
+        Byte_t* mac = DstMAC.Byte;
+        SysLog("Dest MAC: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    }
+
+    if (SrcMAC.Byte != NULL) {
+        Byte_t* mac = SrcMAC.Byte;
+        SysLog("Src MAC: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    }
+
+    /* Iterate through the data buffer and generate a hex/ASCII dump 8 bytes at a time */
+    for (Word_t i = 0; i < Size; i += 8) {
         char line_buf[128];
         int pos = 0;
         pos += sprintf(line_buf + pos, "%04X: ", i);
-        
-        for (int j = 0; j < 8 && (i + j) < Len; j++) {
-            Byte_t byte = Ptr->RxFrame.Payload.Byte[i + j];
-            /* Filter printable ASCII or format as hex */
+
+        for (int j = 0; j < 8 && (i + j) < Size; j++) {
+            Byte_t byte = pData[i + j];
+            /* Distinguish between printable ASCII and non-printable hex values */
             if (byte >= 0x20 && byte <= 0x7E) {
                 pos += sprintf(line_buf + pos, " %c ", byte);
             }
@@ -206,11 +53,49 @@ static void W5500_LogFrame(EthernetW5500_t* Ptr, Word_t Len) {
         }
         SysLog("%s", line_buf);
     }
+    SysExit("W5500_LogFrame");
+}
+
+/// @brief Receive packet from W5500
+static void W5500_TaskComm_Socket0Receive(){
+    Byte_t SIR, IR, Sn_IR, n;
+    Word_t rx_rd, packet_size;
+    Sn_IR = (Byte_t)W5500_ReadByteReg(Eth, eBSB_Socket0Register, eSn_IR);
+    SysLog("W5500_TaskComm(...): S0_IR=%02X", Sn_IR);
+    
+    
+    /* Handle Received Data */
+    if (Sn_IR & 0x04) {
+        rx_rd       = (Word_t)W5500_ReadDoubleByteReg(Eth, eBSB_Socket0Register, eSn_RX_RD0);
+        packet_size = (Word_t)W5500_ReadDoubleByteReg(Eth, eBSB_Socket0RxBuffer, rx_rd);
+        
+        
+        /* Calculate frame length (excluding 2-byte header) and read data */
+        Word_t frame_len = packet_size - 2;
+        if (frame_len > 0) {
+            Word_t read_len = (frame_len > 1514) ? 1514 : frame_len;
+            W5500_ReadNByteReg(Eth, eBSB_Socket0RxBuffer, rx_rd + 2, Eth->RxFrame.Payload.Byte, read_len);
+            // W5500_LogFrame(Eth, read_len);
+            SysLog("W5500_TaskComm(...): Saved %d bytes of frame", read_len);
+            RxedPacket_Push(read_len, (GenericPtr_t) Eth->RxFrame.Payload.Byte);
+        }
+        
+        
+        /* Advance read pointer and confirm with RECV command */
+        rx_rd += packet_size;
+        W5500_WriteDoubleByteReg(Eth, eBSB_Socket0Register, eSn_RX_RD0, rx_rd);
+        W5500_WriteByteReg(Eth, eBSB_Socket0Register, eSn_CR, 0x40);
+    }
+    
+    if (Sn_IR & 0x10) { SysLog("W5500_TaskComm(...): MACRAW Data Sent"); }
+    
+    /* Clear Socket 0 interrupts */
+    W5500_WriteByteReg(Eth, eBSB_Socket0Register, eSn_IR, 0xFF);
 }
 
 /// @brief This task will be woken up when an isr is occurred!
 /// @param arg Pointer to the EthernetW5500_t structure
-void W5500_TaskIsrTrack(void* arg) {
+void W5500_TaskComm(void* arg) {
     Byte_t Attempt;
     Byte_t const MaxAttempt = 3;
     Byte_t SIR, IR, Sn_IR, n;
@@ -218,63 +103,34 @@ void W5500_TaskIsrTrack(void* arg) {
     while (1) {
         /* Reset local variables before sleep */
         Attempt = 0;
-        SysLog("W5500_IsrTrack(...): Task will be put to sleep!\n");
+        SysLog("");
+        SysLog("W5500_TaskComm(...): Task will wake W5500CommCtl wake before sleep!\n");
+        xTaskNotifyGive(W5500CommCtl_TaskHandler);
+        SysLog("W5500_TaskComm(...): Task will be put to sleep!\n");
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         
         /* Task wake up */
-        SysLog("W5500_IsrTrack(...): Task is woken up!");
-        
+        SysLog("W5500_TaskComm(...): Task is woken up!");
         
         /* Loop until no more interrupts or max attempts reached */
         do {
             SIR = (Byte_t)W5500_ReadByteReg(Eth, eBSB_CommonRegister, eSIR);
             IR  = (Byte_t)W5500_ReadByteReg(Eth, eBSB_CommonRegister, eIR);
-            SysLog("W5500_IsrTrack(...): SIR=%02X, IR=%02X", SIR, IR);
+            SysLog("W5500_TaskComm(...): SIR=%02X, IR=%02X", SIR, IR);
             
             if (SIR) {
                 for (n = 0; n < 8; ++n) {
                     if ((1U << n) & SIR) {
                         /* Socket N has interrupt event */
                         switch (n) {
-                            case 0: {
-                                Word_t rx_rd, packet_size;
-                                Sn_IR = (Byte_t)W5500_ReadByteReg(Eth, eBSB_Socket0Register, eSn_IR);
-                                SysLog("W5500_IsrTrack(...): S0_IR=%02X", Sn_IR);
-                                
-                                
-                                /* Handle Received Data */
-                                if (Sn_IR & 0x04) {
-                                    rx_rd       = (Word_t)W5500_ReadDoubleByteReg(Eth, eBSB_Socket0Register, eSn_RX_RD0);
-                                    packet_size = (Word_t)W5500_ReadDoubleByteReg(Eth, eBSB_Socket0RxBuffer, rx_rd);
-                                    
-                                    
-                                    /* Calculate frame length (excluding 2-byte header) and read data */
-                                    Word_t frame_len = packet_size - 2;
-                                    if (frame_len > 0) {
-                                        Word_t read_len = (frame_len > 1514) ? 1514 : frame_len;
-                                        W5500_ReadNByteReg(Eth, eBSB_Socket0RxBuffer, rx_rd + 2, Eth->RxFrame.Payload.Byte, read_len);
-                                        W5500_LogFrame(Eth, read_len);
-                                    }
-                                    
-                                    
-                                    /* Advance read pointer and confirm with RECV command */
-                                    rx_rd += packet_size;
-                                    W5500_WriteDoubleByteReg(Eth, eBSB_Socket0Register, eSn_RX_RD0, rx_rd);
-                                    W5500_WriteByteReg(Eth, eBSB_Socket0Register, eSn_CR, 0x40);
-                                }
-                                
-                                if (Sn_IR & 0x10) { SysLog("W5500_IsrTrack(...): MACRAW Data Sent"); }
-                                
-                                /* Clear Socket 0 interrupts */
-                                W5500_WriteByteReg(Eth, eBSB_Socket0Register, eSn_IR, 0xFF);
-                            }
+                            case 0:
+                                W5500_TaskComm_Socket0Receive();
                             break;
                             
-                            default: {
+                            default:
                                 /* Clear interrupts for other sockets to prevent lock-up */
                                 Byte_t sn_ir_other = (Byte_t)W5500_ReadByteReg(Eth, eBSB_Socket0Register + (n * 4), eSn_IR);
                                 W5500_WriteByteReg(Eth, eBSB_Socket0Register + (n * 4), eSn_IR, sn_ir_other);
-                            }
                             break;
                         }
                     }
@@ -288,81 +144,167 @@ void W5500_TaskIsrTrack(void* arg) {
     }
 }
 
-/* INTERNAL TASK **********************************************************************************************************/
+/* MODULE INIT *************************************************************************************************************/
 
-ReturnCode_t W5500_ForceClearRx(EthernetW5500_t* Ptr) {
-    Word_t rx_wr;
+/// @brief Initialize W5500 network interface for MACRAW and ICMP
+/// @param Eth Pointer to the Ethernet W5500 controller structure
+/// @return STAT_OKE upon successful initialization
+ReturnCode_t W5500CommCtl_Init(EthernetW5500_t * Eth) { 
+    /* Initialize W5500 common registers and network parameters */
+    SysEntry("W5500CommCtl_Init");
+    uint64_t Data;
 
-    /* Place the actual comment here */
-    /* Read current Write Pointer and sync Read Pointer to it */
-    rx_wr = (Word_t)W5500_ReadDoubleByteReg(Ptr, eBSB_Socket0Register, eSn_RX_WR0);
-    W5500_WriteDoubleByteReg(Ptr, eBSB_Socket0Register, eSn_RX_RD0, rx_wr);
+    EthLock = xSemaphoreCreateBinary();
+    xSemaphoreGive(EthLock);
 
-    /* Place the actual comment here */
-    /* Issue RECV command to tell chip we consumed everything */
-    return W5500_WriteByteReg(Ptr, eBSB_Socket0Register, eSn_CR, 0x40);
+    /* Reset device and set mode register */
+    W5500_SetHeader(Eth, eBSB_CommonRegister, eMR); W5500_WriteByte(Eth, 0x80);
+
+    Data = W5500_GetModuleVersion(Eth);
+    if((Data&0xFF) != 0x4){
+        SysErr("W5500CommCtl_Init(...): W5500 Version (=%X) is not supported!", Data & 0xFF);
+        return STAT_ERR_UNSUPPORTED;
+    }
+    SysLog("W5500CommCtl_Init(...): W5500 Version = %X", Data & 0xFF);
+
+    /* Configure Gateway Address */
+    W5500_WriteQuartByteReg(Eth, eBSB_CommonRegister, eGAR0, ConvertByteArrayToInt32_BigEndian(GW_IP_ADDR, 4));
+    SysLog("W5500CommCtl_Init(...): GATEWAY IP=%X", W5500_ReadQuartByteReg(Eth, eBSB_CommonRegister, eGAR0));
+
+    /* Configure Subnet Mask */
+    W5500_WriteQuartByteReg(Eth, eBSB_CommonRegister, eSUBR0, ConvertByteArrayToInt32_BigEndian(SUBNET_MASK, 4));
+    SysLog("W5500CommCtl_Init(...): SUBNET MASK=%X", W5500_ReadQuartByteReg(Eth, eBSB_CommonRegister, eSUBR0));
+
+    /* Configure Source IP Address */
+    W5500_WriteQuartByteReg(Eth, eBSB_CommonRegister, eSIPR0, ConvertByteArrayToInt32_BigEndian(SRC_IP_ADDR, 4));
+    SysLog("W5500CommCtl_Init(...): SOURCE IP=%X", W5500_ReadQuartByteReg(Eth, eBSB_CommonRegister, eSIPR0));
+    
+    /* Configure Hardware MAC Address (Hardware auto-replies to ARP using this) */
+    Data = ConvertByteArrayToInt64_BigEndian(SRC_MAC_ADDR, 6);
+    W5500_WriteNByteReg(Eth, eBSB_CommonRegister, eSHAR0, (void*) &Data, 6);
+    Data = 0;
+    W5500_ReadNByteReg(Eth, eBSB_CommonRegister, eSHAR0, (void*) &Data, 6);
+    SysLog("W5500CommCtl_Init(...): MAC ADDR=%012llX", Data);
+
+
+    /* Enable Socket 0 and Socket 7 global interrupt in SIMR */
+    W5500_WriteByteReg(Eth, eBSB_CommonRegister, eIMR, 0x81);
+    SysLog("W5500CommCtl_Init(...): SIMR=%X", W5500_ReadByteReg(Eth, eBSB_CommonRegister, eIMR));
+
+    /* Configure Interrupt Assert Wait Time (INTLEVEL) to prevent missed edge interrupts */
+    W5500_WriteDoubleByteReg(Eth, eBSB_CommonRegister, eINTLEVEL0, 0x03E8);
+    SysLog("W5500CommCtl_Init(...): INTLEVEL0=%X", W5500_ReadDoubleByteReg(Eth, eBSB_CommonRegister, eINTLEVEL0));
+
+    /* Configure Global Interrupt Mask (IMR) */
+    /* Enable IP Conflict (0x80) and Destination Unreachable (0x10) interrupts */
+    W5500_WriteByteReg(Eth, eBSB_CommonRegister, eIMR, 0x90);
+    SysLog("W5500CommCtl_Init(...): IMR=%X", W5500_ReadByteReg(Eth, eBSB_CommonRegister, eIMR));
+
+    /* Clear any existing ghost interrupts in IR and SIR (Write 1 to clear) */
+    W5500_SetHeader(Eth, eBSB_CommonRegister, 0x0015); 
+    uint8_t dummy_ir = W5500_ReadByte(Eth); 
+    W5500_WriteByte(Eth, dummy_ir);
+
+    W5500_SetHeader(Eth, eBSB_CommonRegister, 0x0017); 
+    uint8_t dummy_sir = W5500_ReadByte(Eth);
+    W5500_WriteByte(Eth, dummy_sir);
+
+    /* Configure Socket 0 for MACRAW */
+    SysLog("W5500CommCtl(...): Configure Socket 0 for MACRAW");
+    W5500_SetHeader(Eth, eBSB_Socket0Register, 0x002C); W5500_WriteByte(Eth, 0x14); /* Sn_IMR: RECV & SEND_OK */
+    W5500_SetHeader(Eth, eBSB_Socket0Register, 0x0000); W5500_WriteByte(Eth, 0x04); /* Sn_MR: MACRAW */
+    W5500_SetHeader(Eth, eBSB_Socket0Register, 0x0001); W5500_WriteByte(Eth, 0x01); /* Sn_CR: OPEN */
+
+    W5500_WriteByteReg(Eth, eBSB_CommonRegister, eSIMR, 0x01);
+    W5500_WriteByteReg(Eth, eBSB_Socket0Register, eSn_RXBUF_SIZE, 0x08);
+
+    /* Configure Socket 7 for Ping (ICMP) */
+    // SysLog("W5500CommCtl(...): Configure Socket 7 for ICMP");
+    // W5500_SetHeader(Eth, eW5500_SelectsSocket7Register, 0x0014); W5500_WriteByte(Eth, 0x01); /* Sn_PROTO: ICMP */
+    // W5500_SetHeader(Eth, eW5500_SelectsSocket7Register, 0x0000); W5500_WriteByte(Eth, 0x03); /* Sn_MR: IPRAW */
+    // W5500_SetHeader(Eth, eW5500_SelectsSocket7Register, 0x0001); W5500_WriteByte(Eth, 0x01); /* Sn_CR: OPEN */
+
+    SysExit("W5500CommCtl_Init");
+    return STAT_OKE;
 }
+
+/* INTERNAL TASK **********************************************************************************************************/
 
 /// @brief  Serivce handle W5500 module
 /// @param arg Ignored
-void EthernetAdapterCtl(void* arg){
-    SysEntry("EthernetAdapterCtl");
+void W5500CommCtl(void* arg){
+    SysEntry("W5500CommCtl");
     
-    /* initialize mutex before creating motor object */
-    /// EthLock = xSemaphoreCreateMutex();
-    EthLock = xSemaphoreCreateBinary();
+    ReturnCode_t RetVal;
+    static Word_t Size;
+    static Byte_t PayloadByte[512];
     
-    SysLog("[EthernetAdapterCtl] New motor object...");
+    RxedPacket_Init();
+    
+    SysLog("W5500CommCtl(...) : New motor object...");
     Eth = W5500_Create(PIN_W5500_MISO, PIN_W5500_MOSI, PIN_W5500_CLK, PIN_W5500_SCS, PIN_W5500_RST, PIN_W5500_INT);
     
     if (IsNull(Eth)) {
-        SysErr("[EthernetAdapterCtl] Cannot initialize `Eth`!");
-        vTaskDelete(NULL);
-        return;
+        SysErr("W5500CommCtl(...) : Cannot initialize `Eth`!");
+        goto CLEANUP_AND_EXIT;
     }
     
-    EthernetAdapterCtl_Init(Eth);
-    
-    W5500_IsrTracking_Function = W5500_TaskIsrTrack;
+    RetVal = W5500CommCtl_Init(Eth);
+    if(RetVal != STAT_OKE){
+        SysErr("W5500CommCtl(...): Cannot initialize module W5500! ErrorCode=%d", RetVal);
+        goto CLEANUP_AND_EXIT;
+    }
+    /*Create subtask to perform copy rxed packet, handle by IsrHandler*/
+    W5500_TaskComming_Function = W5500_TaskComm;
     xTaskCreate(
-        W5500_IsrTracking_Function,
+        W5500_TaskComming_Function,
         "",
         1024,
         NULL,
         eTask_Urgency,
-        &W5500_IsrTracking_TaskHandle
+        &W5500_TaskComm_TaskHandler
     );
 
-
-    SysLog("[AppService_HBridge] Join forever loop...");
+    /*Get current handler*/
+    W5500CommCtl_TaskHandler = xTaskGetCurrentTaskHandle();
+    /*Runtime service to handle internal communication*/
+    SysLog("W5500CommCtl(...) : Join forever loop...");
     while (1) {
         uint64_t Data;
-        Data = W5500_GetModuleVersion(Eth);
+        SysLog("W5500CommCtl(...) : W5500 version=%X", W5500_GetModuleVersion(Eth));
 
-        // SysLog("[EthernetAdapterCtl] SPI Send header = {%02X%02X %02X}", 
-        //     ((uint8_t*)&EthHeader)[2],
-        //     ((uint8_t*)&EthHeader)[1],
-        //     ((uint8_t*)&EthHeader)[0]
-        // );
-
-        // /// W5500_SendHeader(Eth, EthHeader);
-        // SysLog("[EthernetAdapterCtl] SPI Receive 2 bytes data...");
-        // W5500_ReceiveData(Eth, EthHeader, (void *)&Data, 2);
-        // SysLog("[EthernetAdapterCtl] Result = %X", Data & 0xFFFFFFFFFF);
-
-        Byte_t sir  = W5500_ReadByteReg(Eth, eBSB_CommonRegister, eSIR);
-        Byte_t simr = W5500_ReadByteReg(Eth, eBSB_CommonRegister, eSIMR);
-        Byte_t s0ir = W5500_ReadByteReg(Eth, eBSB_Socket0Register, eSn_IR);
-        Byte_t s0imr = W5500_ReadByteReg(Eth, eBSB_Socket0Register, eSn_IMR);
-
-        SysLog("EthernetAdapterCtl(...):  SIR=%02X (Mask=%02X) | S0_IR=%02X (Mask=%02X)", sir, simr, s0ir, s0imr);
-        SysLog("EthernetAdapterCtl(...): Sn_RX_RSR0=%X", W5500_ReadDoubleByteReg(Eth, eBSB_Socket0Register, eSn_RX_RSR0));
-
-        W5500_ForceClearRx(Eth);
+        SysLog("W5500CommCtl(...):  Check RxedPacket and log...");
+        EthSize_t i;
+        SysLog("W5500CommCtl(...):  #Rexed packets=%d", RxedPacket_Size());
+        while(RxedPacket_Size() > 0){
+            SysLog("W5500CommCtl(...):  Print packet #Top, Size=%d", RxedPacket_Size());
+            xSemaphoreTake(RxedPacket_Lock, portMAX_DELAY);
+            memcpy(PayloadByte, RxedPacket_Top()->Ptr, Min(RxedPacket_Top()->Size, 120));
+            Size = Min(RxedPacket_Top()->Size, 120);
+            xSemaphoreGive(RxedPacket_Lock);
+            W5500_LogFrame((GenericPtr_t)PayloadByte, Size, GenericNullPtr, GenericNullPtr);
+            
+            RxedPacket_Pop();
+            SysLog("");
+        }
 
         SysLog("");
-        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        /*Sleep and wake-up for every 5000ms/a triggered event*/
+        SysLog("W5500CommCtl(...) : Task will be put to sleep!");
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(5000));
+        
+        SysLog("");
+        SysLog("W5500CommCtl(...) : Task woken up!");
     }
+
+    /*For exit and delete task when an unexpected error occurred*/
+    CLEANUP_AND_EXIT:
+        vSemaphoreDelete(EthLock);
+        vSemaphoreDelete(RxedPacket_Lock);
+        EthLock = NULL;
+        RxedPacket_Lock = NULL;
+        vTaskDelete(NULL);
 }
 
 /* EOF *******************************************************************************************************************/

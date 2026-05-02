@@ -6,14 +6,15 @@
 #define HCSR04_ECHO_TIMEOUT_US          30000
 #define HCSR04_INTER_SENSOR_DELAY_MS    15
 
+static const Pin_t s_trigPin = PIN_US_TRIG;
+
 static const UltraSonicSensor_t s_defaultSensors[] = {
-	{ PIN_US_L_TRIG, PIN_US_L_ECHO },
-	{ PIN_US_C_TRIG, PIN_US_C_ECHO },
-	{ PIN_US_R_TRIG, PIN_US_R_ECHO },
+	{ PIN_US_TRIG, PIN_US_L_ECHO },
+	{ PIN_US_TRIG, PIN_US_C_ECHO },
+	{ PIN_US_TRIG, PIN_US_R_ECHO },
 };
 
 static ReturnCode_t HCSR04_InitPins(UltraSonic_t *ptr) {
-	uint64_t trigMask = 0ULL;
 	uint64_t echoMask = 0ULL;
 	uint8_t i;
 
@@ -21,16 +22,19 @@ static ReturnCode_t HCSR04_InitPins(UltraSonic_t *ptr) {
 		return STAT_ERR_INVALID_ARG;
 	}
 
+	if (!IsValidPin(s_trigPin)) {
+		return STAT_ERR_INVALID_ARG;
+	}
+
 	for (i = 0; i < ptr->SensorCount; ++i) {
-		if (!IsValidPin(ptr->Sensor[i].Trig) || !IsValidPin(ptr->Sensor[i].Echo)) {
+		if (!IsValidPin(ptr->Sensor[i].Echo)) {
 			return STAT_ERR_INVALID_ARG;
 		}
-		trigMask |= (1ULL << (uint8_t)ptr->Sensor[i].Trig);
 		echoMask |= (1ULL << (uint8_t)ptr->Sensor[i].Echo);
 	}
 
 	gpio_config_t trig_cfg = {
-		.pin_bit_mask = trigMask,
+		.pin_bit_mask = (1ULL << (uint8_t)s_trigPin),
 		.mode = GPIO_MODE_OUTPUT,
 		.pull_up_en = 0,
 		.pull_down_en = 0,
@@ -48,37 +52,32 @@ static ReturnCode_t HCSR04_InitPins(UltraSonic_t *ptr) {
 		return STAT_ERR_IO;
 	}
 
-	for (i = 0; i < ptr->SensorCount; ++i) {
-		gpio_set_level((gpio_num_t)ptr->Sensor[i].Trig, 0);
-	}
-
+	gpio_set_level((gpio_num_t)s_trigPin, 0);
 	return STAT_OKE;
 }
 
 static ReturnCode_t HCSR04_ReadOneRaw(UltraSonic_t *ptr, uint8_t index, uint32_t *distance_mm) {
 	int64_t t0;
 	int64_t timeout_at;
-	gpio_num_t trigPin;
 	gpio_num_t echoPin;
 
 	if (ptr == NULL || ptr->Sensor == NULL || distance_mm == NULL || index >= ptr->SensorCount) {
 		return STAT_ERR_INVALID_ARG;
 	}
 
-	trigPin = (gpio_num_t)ptr->Sensor[index].Trig;
 	echoPin = (gpio_num_t)ptr->Sensor[index].Echo;
 
-	gpio_set_level(trigPin, 0);
+	gpio_set_level((gpio_num_t)s_trigPin, 0);
 	esp_rom_delay_us(2);
-	gpio_set_level(trigPin, 1);
+	gpio_set_level((gpio_num_t)s_trigPin, 1);
 	esp_rom_delay_us(HCSR04_TRIGGER_PULSE_US);
-	gpio_set_level(trigPin, 0);
+	gpio_set_level((gpio_num_t)s_trigPin, 0);
 
 	timeout_at = esp_timer_get_time() + HCSR04_ECHO_TIMEOUT_US;
 	while (gpio_get_level(echoPin) == 0) {
 		if (esp_timer_get_time() > timeout_at) {
-			SysLog("[HCSR04] sensor %u timeout waiting ECHO HIGH (TRIG=%d ECHO=%d)",
-				   (unsigned)index, (int)trigPin, (int)echoPin);
+			SysLog("[HCSR04] sensor %u timeout waiting ECHO HIGH (ECHO=%d)",
+				   (unsigned)index, (int)echoPin);
 			return STAT_ERR_TIMEOUT;
 		}
 	}
@@ -87,8 +86,8 @@ static ReturnCode_t HCSR04_ReadOneRaw(UltraSonic_t *ptr, uint8_t index, uint32_t
 	timeout_at = t0 + HCSR04_ECHO_TIMEOUT_US;
 	while (gpio_get_level(echoPin) == 1) {
 		if (esp_timer_get_time() > timeout_at) {
-			SysLog("[HCSR04] sensor %u timeout waiting ECHO LOW (TRIG=%d ECHO=%d)",
-				   (unsigned)index, (int)trigPin, (int)echoPin);
+			SysLog("[HCSR04] sensor %u timeout waiting ECHO LOW (ECHO=%d)",
+				   (unsigned)index, (int)echoPin);
 			return STAT_ERR_TIMEOUT;
 		}
 	}

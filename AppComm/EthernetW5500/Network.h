@@ -9,17 +9,44 @@
 /* NETWORK DEFINITION ***********************************************************************************************************/
 
 /// @brief 8-bit unsigned integer type
-typedef uint8_t Byte_t;
+typedef uint8_t     Byte_t;
 
 /// @brief 16-bit unsigned integer type
-typedef uint16_t Word_t;
+typedef uint16_t    Word_t;
 
 /// @brief 32-bit unsigned integer type
-typedef uint32_t Dword_t;
+typedef uint32_t    Dword_t;
 
 /// @brief 64-bit unsigned integer type
-typedef uint64_t Qword_t;
+typedef uint64_t    Qword_t;
 
+/// @brief Ethernet size type (16-bit unsigned int, but valid range from 1500 to 0xFFFF)
+typedef Word_t      EthSize_t;
+
+// /// @brief Generic pointer
+// typedef void*       GenericPtr_t;
+
+/// @brief Generic pointer (consist of all casting type)
+typedef union GenericPtr_t {
+    void*       Void;
+
+    int8_t*     Int8;
+    int16_t*    Int16;
+    int32_t*    Int32;
+    int32_t*    Int64;
+
+    uint8_t*    UInt8;
+    uint16_t*   UInt16;
+    uint32_t*   UInt32;
+    uint32_t*   UInt64;
+
+    uint8_t*    Byte;
+    uint16_t*   Word;
+    uint32_t*   DWord;
+    uint32_t*   QWord;
+} GenericPtr_t;
+
+#define GenericNullPtr  ((GenericPtr_t)(NULL))
 
 /// @brief Ethernet MAC Address structure using 48-bit (6 bytes)
 typedef union EthMACAddr_t {
@@ -65,14 +92,14 @@ typedef union IPv4Packet_t {
     uint8_t ByteArr[
         (sizeof(IPv4EndPoint_t)<<1) + sizeof(GenericPayload_t) 
     ];                          ///< Access entire EthPacket_t as byte array
-} EthPacket_t;
+} IPv4Packet_t;
 
 /* GENERIC PAYLOAD UTILS *********************************************************************************************************/
 
 /// @brief Initialize a new generic payload by allocating memory based on existing Size
 /// @param GP_Ptr Pointer to GenericPayload_t structure
 /// @return void
-void NewGenericPayload(GenericPayload_t * GP_Ptr);
+void NewGenericPayload(GenericPayload_t * GP_Ptr, EthSize_t Size);
 
 /// @brief Free allocated memory and reset payload structure
 /// @param GP_Ptr Pointer to GenericPayload_t structure
@@ -165,6 +192,10 @@ uint32_t ConvertByteArrayToInt32_LittleEndian(const uint8_t* ByteArr, uint8_t Si
 /// @return The converted 64-bit unsigned integer
 uint64_t ConvertByteArrayToInt64_LittleEndian(const uint8_t* ByteArr, uint8_t Size);
 
+/// @brief Reverse the byte order of an array in-place (Endianness conversion)
+/// @param Arr Generic pointer to the data array
+/// @param Size Total number of bytes to reverse
+void ReverseByteEndian(GenericPtr_t Arr, EthSize_t Size);
 
 #endif /// __NETWORK_H__
 

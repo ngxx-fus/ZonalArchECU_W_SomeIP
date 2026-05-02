@@ -1,5 +1,7 @@
 #include "Module.h"
 
+#define HCSR04_LOG_PERIOD_MS 500
+
 void HCSR04Ctl(void *arg) {
     UltraSonic_t *ultra;
 
@@ -28,12 +30,20 @@ void HCSR04Ctl(void *arg) {
         count = (unsigned)UltraSonic_GetCount(ultra);
 
         for (unsigned i = 0; i < count; ++i) {
-            unsigned distance = 0xFFFFU;
+            unsigned distanceMm = 0xFFFFU;
             uint16_t rawDistance = 0xFFFFU;
             (void)UltraSonic_GetDistance(ultra, (uint8_t)i, &rawDistance);
-            distance = (unsigned)rawDistance;
-            SysLog("[HCSR04Ctl] S%u=%u mm", (unsigned)i, (unsigned)distance);
+            distanceMm = (unsigned)rawDistance;
+
+            if (distanceMm == 0xFFFFU) {
+                SysLog("[HCSR04Ctl] S%u=timeout", (unsigned)i);
+            } else {
+                unsigned distanceCmX10 = distanceMm;
+                unsigned cmWhole = distanceCmX10 / 10U;
+                unsigned cmFrac = distanceCmX10 % 10U;
+                SysLog("[HCSR04Ctl] S%u=%u.%u cm", (unsigned)i, (unsigned)cmWhole, (unsigned)cmFrac);
+            }
         }
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(HCSR04_LOG_PERIOD_MS));
     }
 }

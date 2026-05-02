@@ -13,17 +13,17 @@ SemaphoreHandle_t    W5500_Lock;
 static spi_device_handle_t w5500_spi_handle;
 
 /* W5500 Isr Tracking task function pointer */
-void (*W5500_IsrTracking_Function)(void*);
+void (*W5500_TaskComming_Function)(void*);
 
 /* W5500 Isr Tracking task handle*/
-TaskHandle_t W5500_IsrTracking_TaskHandle;
+TaskHandle_t W5500_TaskComm_TaskHandler;
 
 /// @brief Handle incoming interrupts from W5500 for MACRAW and ICMP with semaphore protection
 /// @param arg Pointer to the EthernetW5500_t structure
 /// @return void
 static void IRAM_ATTR W5500_IsrHandler(void* arg) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    vTaskNotifyGiveFromISR(W5500_IsrTracking_TaskHandle, &xHigherPriorityTaskWoken);
+    vTaskNotifyGiveFromISR(W5500_TaskComm_TaskHandler, &xHigherPriorityTaskWoken);
     if (xHigherPriorityTaskWoken) {
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
@@ -85,7 +85,7 @@ EthernetW5500_t* W5500_Create(Pin_t MISO, Pin_t MOSI, Pin_t CLK, Pin_t SCS, Pin_
 
     /* add W5500 to the bus with manual CS */
     spi_device_interface_config_t dev_cfg = {
-        .clock_speed_hz = 25 * 1000 * 1000,
+        .clock_speed_hz = 20 * 1000 * 1000,
         .mode = 0, .spics_io_num = -1,
         .queue_size = 7
     };
@@ -333,9 +333,6 @@ ReturnCode_t W5500_WriteQuartByte(EthernetW5500_t* Ptr, uint32_t Data) {
 
 /* TEST *************************************************************************************************************************/
 
-/// @brief Perform a true 5-byte loopback test (Header + Data)
-/// @param tx_data Pointer to 2 bytes of test data
-/// @param rx_full_frame Pointer to a 5-byte buffer to store the result
 ReturnCode_t W5500_LoopbackTest(EthernetW5500_t* Ptr, Byte_t tx_data[2], Byte_t rx_full_frame[5]) {
     EthernetW5500_t* obj = (EthernetW5500_t*)Ptr;
     if (obj == NULL) return STAT_ERR_NULL;
@@ -372,11 +369,6 @@ ReturnCode_t W5500_LoopbackTest(EthernetW5500_t* Ptr, Byte_t tx_data[2], Byte_t 
 
 /* COMPOSE FN *******************************************************************************************************************/
 
-/// @brief Read a byte from a specific W5500 register with thread-safety
-/// @param Ptr Pointer to the W5500 controller structure
-/// @param BLockSelNum Block select bits (e.g., Common or Socket n)
-/// @param RegAddr 16-bit register offset address
-/// @return ReturnCode_t containing the read byte, or STAT_ERR_NULL
 ReturnCode_t W5500_ReadByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
     ReturnCode_t result = STAT_ERR_NULL;
 
@@ -396,12 +388,6 @@ ReturnCode_t W5500_ReadByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t 
     return result;
 }
 
-/// @brief Write a byte to a specific W5500 register with thread-safety
-/// @param Ptr Pointer to the W5500 controller structure
-/// @param BLockSelNum Block select bits (e.g., Common or Socket n)
-/// @param RegAddr 16-bit register offset address
-/// @param ByteValue 8-bit value to write
-/// @return ReturnCode_t STAT_OKE if successful, or error status
 ReturnCode_t W5500_WriteByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t ByteValue) {
     ReturnCode_t result = STAT_ERR_NULL;
 
@@ -421,11 +407,6 @@ ReturnCode_t W5500_WriteByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t
     return result;
 }
 
-/// @brief Read two bytes from a specific W5500 register with thread-safety
-/// @param Ptr Pointer to the W5500 controller structure
-/// @param BLockSelNum Block select bits (e.g., Common or Socket n)
-/// @param RegAddr 16-bit register offset address
-/// @return ReturnCode_t containing the 16-bit value, or STAT_ERR_NULL
 ReturnCode_t W5500_ReadDoubleByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
     ReturnCode_t result = STAT_ERR_NULL;
 
@@ -445,12 +426,6 @@ ReturnCode_t W5500_ReadDoubleByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, W
     return result;
 }
 
-/// @brief Write two bytes to a specific W5500 register with thread-safety
-/// @param Ptr Pointer to the W5500 controller structure
-/// @param BLockSelNum Block select bits (e.g., Common or Socket n)
-/// @param RegAddr 16-bit register offset address
-/// @param Data 16-bit value to write
-/// @return ReturnCode_t STAT_OKE if successful, or error status
 ReturnCode_t W5500_WriteDoubleByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Word_t Data) {
     ReturnCode_t result = STAT_ERR_NULL;
 
@@ -470,11 +445,6 @@ ReturnCode_t W5500_WriteDoubleByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, 
     return result;
 }
 
-/// @brief Read four bytes from a specific W5500 register with thread-safety
-/// @param Ptr Pointer to the W5500 controller structure
-/// @param BLockSelNum Block select bits
-/// @param RegAddr 16-bit register offset address
-/// @return ReturnCode_t containing the 32-bit value, or STAT_ERR_NULL
 ReturnCode_t W5500_ReadQuartByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
     ReturnCode_t result = STAT_ERR_NULL;
 
@@ -493,12 +463,6 @@ ReturnCode_t W5500_ReadQuartByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Wo
     return result;
 }
 
-/// @brief Write four bytes to a specific W5500 register with thread-safety
-/// @param Ptr Pointer to the W5500 controller structure
-/// @param BLockSelNum Block select bits
-/// @param RegAddr 16-bit register offset address
-/// @param Data 32-bit value to write
-/// @return ReturnCode_t STAT_OKE if successful
 ReturnCode_t W5500_WriteQuartByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Dword_t Data) {
     ReturnCode_t result = STAT_ERR_NULL;
 
@@ -517,13 +481,6 @@ ReturnCode_t W5500_WriteQuartByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, W
     return result;
 }
 
-/// @brief Read N bytes from a specific W5500 block/address with thread-safety
-/// @param Ptr Pointer to the W5500 controller structure
-/// @param BLockSelNum Block select bits
-/// @param RegAddr 16-bit register offset address
-/// @param Buffer Destination buffer
-/// @param Len Number of bytes to read
-/// @return ReturnCode_t STAT_OKE if successful
 ReturnCode_t W5500_ReadNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t* Buffer, Word_t Len) {
     ReturnCode_t result = STAT_ERR_NULL;
 
@@ -542,13 +499,6 @@ ReturnCode_t W5500_ReadNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t
     return result;
 }
 
-/// @brief Write N bytes to a specific W5500 block/address with thread-safety
-/// @param Ptr Pointer to the W5500 controller structure
-/// @param BLockSelNum Block select bits
-/// @param RegAddr 16-bit register offset address
-/// @param Data Source data buffer
-/// @param Len Number of bytes to write
-/// @return ReturnCode_t STAT_OKE if successful
 ReturnCode_t W5500_WriteNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t* Data, Word_t Len) {
     ReturnCode_t result = STAT_ERR_NULL;
 
@@ -556,7 +506,6 @@ ReturnCode_t W5500_WriteNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_
         return STAT_ERR_NULL;
     }
 
-    /* Place the actual comment here */
     /* Lock SPI bus to write a burst of N bytes */
     if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
         W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
@@ -567,9 +516,17 @@ ReturnCode_t W5500_WriteNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_
     return result;
 }
 
-/// @brief Read the hardware version code from VERSIONR (0x0039)
-/// @param Ptr Pointer to the W5500 controller structure
-/// @return STAT_OKE if successful, STAT_ERR_NULL if pointer is invalid
+ReturnCode_t W5500_ClearRxBuffer(EthernetW5500_t* Ptr) {
+    Word_t rx_wr;
+
+    /* Read current Write Pointer and sync Read Pointer to it */
+    rx_wr = (Word_t)W5500_ReadDoubleByteReg(Ptr, eBSB_Socket0Register, eSn_RX_WR0);
+    W5500_WriteDoubleByteReg(Ptr, eBSB_Socket0Register, eSn_RX_RD0, rx_wr);
+
+    /* Issue RECV command to tell chip we consumed everything */
+    return W5500_WriteByteReg(Ptr, eBSB_Socket0Register, eSn_CR, 0x40);
+}
+
 ReturnCode_t W5500_GetModuleVersion(EthernetW5500_t* Ptr) {
     EthernetW5500_t* obj = (EthernetW5500_t*)Ptr;
     if (obj == NULL) return STAT_ERR_NULL;
@@ -589,7 +546,7 @@ ReturnCode_t W5500_GetModuleVersion(EthernetW5500_t* Ptr) {
     spi_device_polling_transmit(w5500_spi_handle, &t);
     gpio_set_level(obj->Pinout.SCS, 1);
 
-    SysLog("W5500_GetModuleVersion(...): Hardware Version: 0x%02X", rx_buf[3]);
+    /// SysLog("W5500_GetModuleVersion(...): Hardware Version: 0x%02X", rx_buf[3]);
 
     return rx_buf[3];
 }

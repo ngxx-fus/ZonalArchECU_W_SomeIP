@@ -19,9 +19,9 @@ struct AppService_t{
     TaskHandle_t    Handle;
 } ServiceList[] = {
     /*name*/                /*function ptr*/        /*Stack Size*//*ParamPtr*//*Priority*/          /*TaskHandle*/
-    {"MotorCtl",            MotorCtl,               2048,           NULL,       eTask_RealTime,     0},
-    {"Eth",                 EthernetAdapterCtl,     2048,           NULL,       eTask_Normal,       0},
-    //{"HCSR04",              HCSR04Ctl,              2048,           NULL,       eTask_RealTime,     0},
+    //{"MotorCtl",            MotorCtl,               2048,           NULL,       eTask_RealTime,     0},
+    {"Eth",                 W5500CommCtl,           2048,           NULL,       eTask_Normal,       0},
+    {"HCSR04",              HCSR04Ctl,              2048,           NULL,       eTask_RealTime,     0},
     // {"Chaos_Zero",       Dummy0,                 2048,           NULL,       eTask_Normal,       0},
     // {"Chaos_Max",        Dummy1,                 2048,           NULL,       eTask_Low,          0},
     // {"Chaos_Jitter",     Dummy_Jitter,           2048,           NULL,       eTask_Background,   0},
