@@ -1,3 +1,7 @@
+# PRIORITY INFO
+
+This branch for the Front-ZECU 
+
 # About
 
 This is a mini-project implementing a Zonal Architecture on a scale model. The system consists of:
