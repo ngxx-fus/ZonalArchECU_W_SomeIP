@@ -12,6 +12,8 @@ set(srcs
     "HBridge/HBridge.c"
     
     "Dummy/Dummy.c"
+
+    "__Shared/RoutingMatrix.c"
 )
 
 # @brief Export include directories so other components can find the headers
@@ -19,6 +21,7 @@ set(include_dirs
     "."
     "Dummy"
     "HBridge"
+    "__Shared"
     "EthernetW5500"
     "UltraSonic"
 )
