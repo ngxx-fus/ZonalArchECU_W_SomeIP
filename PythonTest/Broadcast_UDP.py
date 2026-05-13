@@ -2,44 +2,85 @@ import socket
 import time
 from datetime import datetime
 
-# @brief Helper function to print logs with a precise timestamp [HH:MM:SS.SS]
-# @param message The string content to print
+"""
+/*
+ * @brief Helper function to print logs with a precise timestamp [HH:MM:SS.SS]
+ * @param message The string content to print
+ */
+"""
 def log(message):
     now = datetime.now()
-    # strftime("%f") trả về microsecond (6 số), ta cắt lấy 2 số đầu để ra .SS
     timestamp = now.strftime("[%H:%M:%S.") + f"{now.microsecond // 10000:02d}]"
     print(f"{timestamp} {message}")
-
-# @brief Sends a UDP string message to a target IP and Port
-# @param target_ip The destination IP address (e.g., "10.0.0.19")
-# @param target_port The destination UDP port (e.g., 5000)
-# @param message The string payload to send
-# @return True if sent successfully, False otherwise
-def send_udp_packet(target_ip, target_port, message):
-    """ Create a standard UDP socket (IPv4, Datagram) """
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     
-    try:
-        """ Encode the string to bytes and send it to the destination """
-        sock.sendto(message.encode('utf-8'), (target_ip, target_port))
-        log(f"Sent: '{message}' to {target_ip}:{target_port}")
+    # /* Return from function */
+    return
+
+"""
+/*
+ * @brief Log the payload details in a standard Hex + ASCII dump format
+ * @param data The payload buffer as a byte array
+ */
+"""
+def log_frame(data):
+    size = len(data)
+    log(f"log_frame(...) : Payload Dump | Size: {size} bytes")
+
+    # /* Iterate through the data buffer 8 bytes at a time */
+    for i in range(0, size, 8):
+        chunk = data[i:i+8]
         
-        """ Optional: Wait for a response (timeout 2 seconds) """
-        sock.settimeout(2.0)
-        data, addr = sock.recvfrom(1024)
-        log(f"Received reply from {addr[0]}:{addr[1]} -> {data.decode('utf-8')}")
+        # /* Build the hex string (e.g., "3E 3E 3E...") */
+        hex_part = " ".join([f"{b:02X}" for b in chunk])
+        
+        # /* Build the ASCII string, replacing non-printable chars with '.' */
+        ascii_part = "".join([chr(b) if 0x20 <= b <= 0x7E else "." for b in chunk])
+        
+        # /* Align output: Offset | Hex Data | ASCII Data */
+        # /* <23 aligns the hex part to occupy exactly 23 chars (8*2 + 7 spaces) */
+        log(f"{i:04X}: {hex_part:<23} | {ascii_part}")
+        
+    # /* Return from function */
+    return
+
+"""
+/*
+ * @brief Sends a UDP string message to a target IP and Port (Fire-and-forget)
+ * @param target_ip The destination IP address
+ * @param target_port The destination UDP port
+ * @param message The string payload to send
+ * @return True if sent successfully, False otherwise
+ */
+"""
+def send_udp_packet(target_ip, target_port, message):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    
+    payload_bytes = message.encode('utf-8')
+    
+    # /* Try block to handle network transmission */
+    try:
+        sock.sendto(payload_bytes, (target_ip, target_port))
+        log(f"Sent to {target_ip}:{target_port}")
+        
+        # /* Dump the transmitted payload to console */
+        log_frame(payload_bytes)
+        
+        # /* Return success status immediately without blocking for receive */
         return True
         
-    except socket.timeout:
-        log(f"Timeout: No response from {target_ip}:{target_port}.")
-        return False
+    # /* Catch execution errors */
     except Exception as e:
         log(f"Error during UDP communication: {e}")
+        
+        # /* Return failure status */
         return False
+        
+    # /* Always close the socket to prevent resource leaks */
     finally:
-        """ Always close the socket to free OS resources """
         sock.close()
 
+# /* Main execution entry point */
 if __name__ == "__main__":
     TARGET_IP = "255.255.255.255"
     TARGET_PORT = 5000
@@ -48,10 +89,12 @@ if __name__ == "__main__":
     
     packet_count = 1
     
-    """ Loop to send test packets periodically """
+    # /* Infinite loop to send test packets periodically */
     while True:
         payload = f">>>>>>>>>>>>>>>>{packet_count}>>>>>>>>>>>>>>>>"
         send_udp_packet(TARGET_IP, TARGET_PORT, payload)
         
         packet_count += 1
-        time.sleep(0.1)
+        
+        # /* Delay exactly 100ms before the next transmission */
+        time.sleep(1)

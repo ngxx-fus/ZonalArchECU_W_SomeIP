@@ -19,7 +19,7 @@ def send_custom_ether_frames(dst_mac, iface):
     # /* Initialize counter and start the transmission loop */
     counter = 0
     
-    while counter < 5:
+    while counter < 150:
         
         # /* Construct the 8-byte payload: 0x00 0xFF 0xAB 0xDE 0x00 A5 A5 <counter> */
         # payload_bytes = [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, counter, counter, counter, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]

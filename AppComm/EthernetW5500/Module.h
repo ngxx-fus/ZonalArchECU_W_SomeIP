@@ -7,9 +7,9 @@
 extern SemaphoreHandle_t    EthLock;
 extern GenericPayload_t     RxedPacket[];
 extern TaskHandle_t         W5500CommCtl_TaskHandler;
+
+
 /*Module public APIs*/
-
-
 // ReturnCode_t EthSetIPv4AddressHost(uint32_t IPv4Addr);
 // ReturnCode_t EthSetIPv4AddressGateWay(uint32_t IPv4Addr);
 // ReturnCode_t EthSetIPv4SubnetMask(uint32_t IPv4SubnetMask);

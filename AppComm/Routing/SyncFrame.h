@@ -47,6 +47,25 @@ typedef struct __attribute__((packed)) {
 } SF_ECUState_t;
 
 /**
+ * @brief Union for SF Motor Control data handling.
+ * Total size is fixed at 504 bytes.
+ */
+typedef union SF_MotorCtl_t {
+    struct __attribute__((packed)) {
+        uint64_t        Pattern0        : 64;  ///< Pattern0: 0xFF00FFFF000055AA
+        uint32_t        M0              : 10;
+        uint32_t        M1              : 10;
+        uint32_t        ReservedBits    : 12;  ///< Padding to align to next byte
+        uint64_t        Pattern1        : 64;  ///< Pattern1: 0xBBCCDDDDEEEE2233
+        uint64_t        Pattern2        : 64;  ///< Pattern2: 0x1144555567889999
+        
+        /* Calculate remaining bytes: 504 - (8 + 4 + 8 + 8) = 476 bytes */
+        uint8_t         Reserved[476];         ///< Padding to reach 504 bytes
+    };
+    uint8_t RawByte[504];
+} SF_MotorCtl_t;
+
+/**
  * @brief Dynamic Header option field (2 Bytes).
  */
 typedef union {

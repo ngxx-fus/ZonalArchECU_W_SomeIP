@@ -4,6 +4,12 @@
 #include <string.h>
 #include <stdio.h>
 
+#define READ_AFTER_WRITE_LOG_EN 1
+
+#ifndef READ_AFTER_WRITE_LOG_EN
+    #define READ_AFTER_WRITE_LOG_EN 0
+#endif /*READ_AFTER_WRITE_LOG_EN*/
+
 /* STATIC VARIABLES *************************************************************************************************************/
 
 /* Static handler for the W5500 semaphore*/
@@ -38,7 +44,6 @@ ReturnCode_t W5500_InitLock(void) {
         return STAT_ERR;
     }
 
-    /* Place the actual comment here */
     /* Binary semaphores start at 0 (locked); give once to make it available */
     xSemaphoreGive(W5500_Lock);
     
@@ -62,7 +67,10 @@ EthernetW5500_t* W5500_Create(Pin_t MISO, Pin_t MOSI, Pin_t CLK, Pin_t SCS, Pin_
         .pin_bit_mask = (1ULL << obj->Pinout.SCS) | (1ULL << obj->Pinout.RST),
         .pull_down_en = 0, .pull_up_en = 0
     };
-    gpio_config(&io_conf);
+    if (gpio_config(&io_conf) != ESP_OK) {
+        free(obj);
+        return NULL;
+    }
     gpio_set_level(obj->Pinout.SCS, 1);
     gpio_set_level(obj->Pinout.RST, 1);
 
@@ -73,7 +81,12 @@ EthernetW5500_t* W5500_Create(Pin_t MISO, Pin_t MOSI, Pin_t CLK, Pin_t SCS, Pin_
         .pin_bit_mask = (1ULL << obj->Pinout.INT),
         .pull_up_en = 1, .pull_down_en = 0
     };
-    gpio_config(&in_conf);
+    if (gpio_config(&in_conf) != ESP_OK) {
+        free(obj);
+        return NULL;
+    }
+    gpio_pullup_en(obj->Pinout.INT);
+    gpio_pulldown_dis(obj->Pinout.INT);
 
     /* configure SPI bus */
     spi_bus_config_t bus_cfg = {
@@ -91,8 +104,14 @@ EthernetW5500_t* W5500_Create(Pin_t MISO, Pin_t MOSI, Pin_t CLK, Pin_t SCS, Pin_
     };
     spi_bus_add_device(SPI2_HOST, &dev_cfg, &w5500_spi_handle);
     /* install ISR service and add handler for W5500 INT pin */
-    gpio_install_isr_service(0);
-    gpio_isr_handler_add(obj->Pinout.INT, W5500_IsrHandler, (void*) obj);
+    if (gpio_install_isr_service(0) != ESP_OK) {
+        free(obj);
+        return NULL;
+    }
+    if (gpio_isr_handler_add(obj->Pinout.INT, W5500_IsrHandler, (void*) obj) != ESP_OK) {
+        free(obj);
+        return NULL;
+    }
 
     /// W5500_Lock = xSemaphoreCreateBinary();
     W5500_InitLock();
@@ -297,7 +316,7 @@ ReturnCode_t W5500_WriteNByte(EthernetW5500_t* Ptr, Byte_t* Data, Word_t Len) {
 ReturnCode_t W5500_WriteByte(EthernetW5500_t* Ptr, Byte_t Data) {
     if (IsNull(Ptr)) return STAT_ERR_NULL;
 
-    /* Place the actual comment here */
+
     Ptr->TxFrame.Header.OpMode = eW5500_FDM1;
     Ptr->TxFrame.Payload.Byte[0] = Data;
     Ptr->TxFrame.Payload.Length = 1;
@@ -367,166 +386,6 @@ ReturnCode_t W5500_LoopbackTest(EthernetW5500_t* Ptr, Byte_t tx_data[2], Byte_t 
     return STAT_OKE;
 }
 
-/* COMPOSE FN *******************************************************************************************************************/
-
-ReturnCode_t W5500_ReadByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
-    ReturnCode_t result = STAT_ERR_NULL;
-
-    if (Ptr == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    /* Acquire the hardware lock to protect SPI transaction */
-    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
-        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
-        result = W5500_ReadByte(Ptr);
-
-        /* Release the hardware lock */
-        xSemaphoreGive(W5500_Lock);
-    }
-    
-    return result;
-}
-
-ReturnCode_t W5500_WriteByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t ByteValue) {
-    ReturnCode_t result = STAT_ERR_NULL;
-
-    if (Ptr == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    /* Acquire the hardware lock to protect SPI transaction */
-    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
-        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
-        result = W5500_WriteByte(Ptr, ByteValue);
-
-        /* Release the hardware lock */
-        xSemaphoreGive(W5500_Lock);
-    }
-    
-    return result;
-}
-
-ReturnCode_t W5500_ReadDoubleByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
-    ReturnCode_t result = STAT_ERR_NULL;
-
-    if (Ptr == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    /* Acquire the hardware lock to protect SPI transaction */
-    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
-        /* Set header and execute 16-bit read */
-        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
-        result = W5500_ReadDoubleByte(Ptr);
-
-        xSemaphoreGive(W5500_Lock);
-    }
-    
-    return result;
-}
-
-ReturnCode_t W5500_WriteDoubleByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Word_t Data) {
-    ReturnCode_t result = STAT_ERR_NULL;
-
-    if (Ptr == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    /* Acquire the hardware lock to protect SPI transaction */
-    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
-        /* Set header and execute 16-bit write */
-        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
-        result = W5500_WriteDoubleByte(Ptr, Data);
-
-        xSemaphoreGive(W5500_Lock);
-    }
-    
-    return result;
-}
-
-ReturnCode_t W5500_ReadQuartByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
-    ReturnCode_t result = STAT_ERR_NULL;
-
-    if (Ptr == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    /* Place the actual comment here */
-    /* Acquire lock and execute 4-byte SPI read */
-    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
-        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
-        result = W5500_ReadQuartByte(Ptr);
-        xSemaphoreGive(W5500_Lock);
-    }
-    
-    return result;
-}
-
-ReturnCode_t W5500_WriteQuartByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Dword_t Data) {
-    ReturnCode_t result = STAT_ERR_NULL;
-
-    if (Ptr == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    /* Place the actual comment here */
-    /* Acquire lock and execute 4-byte SPI write */
-    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
-        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
-        result = W5500_WriteQuartByte(Ptr, Data);
-        xSemaphoreGive(W5500_Lock);
-    }
-    
-    return result;
-}
-
-ReturnCode_t W5500_ReadNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t* Buffer, Word_t Len) {
-    ReturnCode_t result = STAT_ERR_NULL;
-
-    if (Ptr == NULL || Buffer == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    /* Place the actual comment here */
-    /* Lock SPI bus to read a burst of N bytes */
-    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
-        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
-        result = W5500_ReadNByte(Ptr, Buffer, Len);
-        xSemaphoreGive(W5500_Lock);
-    }
-    
-    return result;
-}
-
-ReturnCode_t W5500_WriteNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t* Data, Word_t Len) {
-    ReturnCode_t result = STAT_ERR_NULL;
-
-    if (Ptr == NULL || Data == NULL) {
-        return STAT_ERR_NULL;
-    }
-
-    /* Lock SPI bus to write a burst of N bytes */
-    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
-        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
-        result = W5500_WriteNByte(Ptr, Data, Len);
-        xSemaphoreGive(W5500_Lock);
-    }
-    
-    return result;
-}
-
-ReturnCode_t W5500_ClearRxBuffer(EthernetW5500_t* Ptr) {
-    Word_t rx_wr;
-
-    /* Read current Write Pointer and sync Read Pointer to it */
-    rx_wr = (Word_t)W5500_ReadDoubleByteReg(Ptr, eBSB_Socket0Register, eSn_RX_WR0);
-    W5500_WriteDoubleByteReg(Ptr, eBSB_Socket0Register, eSn_RX_RD0, rx_wr);
-
-    /* Issue RECV command to tell chip we consumed everything */
-    return W5500_WriteByteReg(Ptr, eBSB_Socket0Register, eSn_CR, 0x40);
-}
-
 ReturnCode_t W5500_GetModuleVersion(EthernetW5500_t* Ptr) {
     EthernetW5500_t* obj = (EthernetW5500_t*)Ptr;
     if (obj == NULL) return STAT_ERR_NULL;
@@ -549,6 +408,232 @@ ReturnCode_t W5500_GetModuleVersion(EthernetW5500_t* Ptr) {
     /// SysLog("W5500_GetModuleVersion(...): Hardware Version: 0x%02X", rx_buf[3]);
 
     return rx_buf[3];
+}
+
+/* COMPOSE FN *******************************************************************************************************************/
+
+
+ReturnCode_t W5500_ReadByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    /* Validate pointer */
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Acquire the hardware lock to protect SPI transaction */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
+        result = W5500_ReadByte(Ptr);
+
+        #if (READ_AFTER_WRITE_LOG_EN == 1)
+        SysLog("W5500_ReadByteReg(...): %04X=%02X", RegAddr, (Byte_t)result);
+        #endif
+
+        /* Release the hardware lock */
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+ReturnCode_t W5500_WriteByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t ByteValue) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    /* Validate pointer */
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Acquire the hardware lock to protect SPI transaction */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
+        result = W5500_WriteByte(Ptr, ByteValue);
+
+        #if (READ_AFTER_WRITE_LOG_EN == 1)
+        /* Set header again for reading to verify */
+        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
+        SysLog("W5500_WriteByteReg(...): Write %04X=%02X Result: %02X", RegAddr, ByteValue, (Byte_t)W5500_ReadByte(Ptr));
+        #endif
+
+        /* Release the hardware lock */
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+ReturnCode_t W5500_ReadDoubleByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    /* Validate pointer */
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Acquire the hardware lock to protect SPI transaction */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        /* Set header and execute 16-bit read */
+        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
+        result = W5500_ReadDoubleByte(Ptr);
+
+        #if (READ_AFTER_WRITE_LOG_EN == 1)
+        SysLog("W5500_ReadDoubleByteReg(...): %04X=%04X", RegAddr, (Word_t)result);
+        #endif
+
+        /* Release the hardware lock */
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+ReturnCode_t W5500_WriteDoubleByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Word_t Data) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    /* Validate pointer */
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Acquire the hardware lock to protect SPI transaction */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        /* Set header and execute 16-bit write */
+        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
+        result = W5500_WriteDoubleByte(Ptr, Data);
+
+        #if (READ_AFTER_WRITE_LOG_EN == 1)
+        /* Set header again for reading to verify */
+        W5500_SetHeader(Ptr, BLockSelNum, RegAddr);
+        SysLog("W5500_WriteDoubleByteReg(...): Write %04X=%04X Result: %04X", RegAddr, Data, (Word_t)W5500_ReadDoubleByte(Ptr));
+        #endif
+
+        /* Release the hardware lock */
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+ReturnCode_t W5500_ReadQuartByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    /* Validate pointer */
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Acquire lock and execute 4-byte SPI read */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
+        result = W5500_ReadQuartByte(Ptr);
+        
+        #if (READ_AFTER_WRITE_LOG_EN == 1)
+        SysLog("W5500_ReadQuartByteReg(...): %04X=%08lX", RegAddr, (unsigned long)result);
+        #endif
+
+        /* Release the hardware lock */
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+ReturnCode_t W5500_WriteQuartByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Dword_t Data) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    /* Validate pointer */
+    if (Ptr == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Acquire lock and execute 4-byte SPI write */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
+        result = W5500_WriteQuartByte(Ptr, Data);
+
+        #if (READ_AFTER_WRITE_LOG_EN == 1)
+        /* Set header again for reading to verify */
+        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
+        SysLog("W5500_WriteQuartByteReg(...): Write %04X=%08lX Result: %08lX", RegAddr, (unsigned long)Data, (unsigned long)W5500_ReadQuartByte(Ptr));
+        #endif
+
+        /* Release the hardware lock */
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+ReturnCode_t W5500_ReadNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t* Buffer, Word_t Len) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    /* Validate pointers */
+    if (Ptr == NULL || Buffer == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Lock SPI bus to read a burst of N bytes */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
+        result = W5500_ReadNByte(Ptr, Buffer, Len);
+        
+        #if (READ_AFTER_WRITE_LOG_EN == 1)
+        /* Format hexadecimal string representations (max 6 bytes for log) */
+        char rd_str[19] = {0};
+        Word_t read_len = (Len > 6) ? 6 : Len;
+
+        for (int i = 0; i < read_len; i++) {
+            sprintf(&rd_str[i * 3], "%02X ", Buffer[i]);
+        }
+        
+        SysLog("W5500_ReadNByteReg(...): %04X=[%s]", RegAddr, rd_str);
+        #endif
+
+        /* Release the hardware lock */
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
+}
+
+ReturnCode_t W5500_WriteNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t RegAddr, Byte_t* Data, Word_t Len) {
+    ReturnCode_t result = STAT_ERR_NULL;
+
+    /* Validate pointers */
+    if (Ptr == NULL || Data == NULL) {
+        return STAT_ERR_NULL;
+    }
+
+    /* Lock SPI bus to write a burst of N bytes */
+    if (xSemaphoreTake(W5500_Lock, portMAX_DELAY) == pdTRUE) {
+        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
+        result = W5500_WriteNByte(Ptr, Data, Len);
+
+        #if (READ_AFTER_WRITE_LOG_EN == 1)
+        /* Read back up to 6 bytes for logging */
+        Byte_t read_buf[6] = {0};
+        char wr_str[19] = {0};
+        char rd_str[19] = {0};
+        Word_t read_len = (Len > 6) ? 6 : Len;
+
+        W5500_SetHeader(Ptr, (Byte_t)BLockSelNum, RegAddr);
+        W5500_ReadNByte(Ptr, read_buf, read_len);
+
+        /* Format hexadecimal string representations */
+        for (int i = 0; i < read_len; i++) {
+            sprintf(&wr_str[i * 3], "%02X ", Data[i]);
+            sprintf(&rd_str[i * 3], "%02X ", read_buf[i]);
+        }
+        
+        SysLog("W5500_WriteNByteReg(...): Write %04X=[%s] Result: [%s]", RegAddr, wr_str, rd_str);
+        #endif
+
+        /* Release the hardware lock */
+        xSemaphoreGive(W5500_Lock);
+    }
+    
+    return result;
 }
 
 /* EOF **************************************************************************************************************************/

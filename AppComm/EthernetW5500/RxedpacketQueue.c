@@ -1,9 +1,9 @@
 #include "RxedPacketQueue.h"
 
 SemaphoreHandle_t    RxedPacket_Lock;
-const EthSize_t      MaxNumRxedPacket = 120;
+const EthSize_t      MaxNumRxedPacket = 8;
 volatile EthSize_t   NumRxedPacket = 0;
-GenericPayload_t     RxedPacket[120];
+GenericPayload_t     RxedPacket[8];
 
 /* INTERNAL SETUP FUNCTION ******************************************************************************************************/
 
