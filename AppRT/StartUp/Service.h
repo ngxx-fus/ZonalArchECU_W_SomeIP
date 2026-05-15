@@ -10,6 +10,8 @@
 #include "../AppComm/EthernetW5500/Module.h"
 #include "../AppComm/HBridge/Module.h"
 #include "../AppComm/Dummy/Dummy.h"
+#include "../../AppComm/Heart/Heart.h"
+#include "../../AppComm/UltraSonic/Module.h"
 
 /// @brief Structure of service
 typedef struct AppService_t{

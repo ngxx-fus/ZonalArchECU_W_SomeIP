@@ -1,15 +1,18 @@
 # @brief Collect all source files from subdirectories
 set(srcs
-    "EthernetW5500/RxedpacketQueue.c"
     "EthernetW5500/EthernetW5500.c"
+    "EthernetW5500/PacketQueue.c"
     "EthernetW5500/Network.c"
     "EthernetW5500/Module.c"
     "EthernetW5500/E2E.c"
     
+    "UltraSonic/Module.c"
     "UltraSonic/UltraSonic.c"
     
     "HBridge/Module.c"
     "HBridge/HBridge.c"
+
+    "Heart/Heart.c"
     
     "Dummy/Dummy.c"
 
@@ -25,6 +28,7 @@ set(include_dirs
     "Routing"
     "EthernetW5500"
     "UltraSonic"
+    "Heart"
 )
 
 # @brief Register the component with ESP-IDF build system

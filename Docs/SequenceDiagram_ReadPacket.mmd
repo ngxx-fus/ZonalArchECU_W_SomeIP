@@ -1,0 +1,53 @@
+sequenceDiagram
+    autonumber
+    
+    participant W5500 as W5500 Module
+    participant ISR as GPIO ISR Handler
+    participant RxTask as W5500_TaskComm_GetPacket
+    participant SPI as SPI Driver
+    participant Queue as Lock-Free PacketPool
+    participant MainTask as W5500CommCtl Task
+
+    Note over W5500, ISR: Hardware Interrupt (Burst Traffic)
+    W5500->>+ISR: (1) Pull INT pin LOW
+    ISR->>-RxTask: (2) vTaskNotifyGiveFromISR (Wake up)
+
+    activate RxTask
+    Note over RxTask, Queue: Packet 1: Reading & Lock-Free Queuing
+    RxTask->>+SPI: (3) Read SIR, Rx Pointer, Payload
+    SPI->>W5500: SPI Transactions
+    W5500-->>SPI: Raw payload data
+    SPI-->>-RxTask: Store in Eth->RxFrame.Payload.Byte (Packet 1)
+    RxTask->>+Queue: (4) RxedPacket_Push(Packet 1)
+    Queue->>Queue: Atomic CAS: SLOT_FREE -> SLOT_WRITING
+    RxTask->>Queue: memcpy from Eth->RxFrame to Pool[i].Data
+    Queue->>Queue: Atomic Store: SLOT_WRITING -> SLOT_READY
+    Queue-->>-RxTask: Return STAT_OKE
+
+    Note over RxTask, Queue: Packet 2: Back-to-back reception
+    RxTask->>SPI: (5) Loop again, read next payload...
+    SPI-->>RxTask: Store in Eth->RxFrame.Payload.Byte (Packet 2)
+    RxTask->>Queue: (6) RxedPacket_Push(Packet 2)
+    Queue->>Queue: Atomic CAS: SLOT_FREE -> SLOT_WRITING
+    RxTask->>Queue: memcpy from Eth->RxFrame to Pool[j].Data
+    Queue->>Queue: Atomic Store: SLOT_WRITING -> SLOT_READY
+    
+    Note over RxTask, MainTask: Handoff for Processing
+    RxTask->>+MainTask: (7) xTaskNotifyGive (Wake up MainTask)
+    RxTask->>-RxTask: Sleep (ulTaskNotifyTake)
+    
+    Note over MainTask, Queue: Consumer Strategy (Highest Priority First)
+    MainTask->>+Queue: (8) RxedPacket_GetHighestPriority()
+    Queue->>Queue: Scan READY slots, find lowest Data[0]
+    Queue->>Queue: Atomic CAS: SLOT_READY -> SLOT_READING
+    Queue-->>-MainTask: Return ptr to PacketPool[best_idx]
+    
+    MainTask->>MainTask: (9) W5500_LogFrame (Hex/ASCII dump)
+    
+    Note over MainTask, Queue: Cleanup (No memory deallocation)
+    MainTask->>+Queue: (10) RxedPacket_Release(pkt)
+    Queue->>Queue: Atomic Store: SLOT_READING -> SLOT_FREE
+    Queue-->>-MainTask: Slot released
+    
+    MainTask->>MainTask: Loop steps 8-10 until Queue is Empty
+    MainTask->>-MainTask: Sleep (ulTaskNotifyTake)

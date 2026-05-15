@@ -42,6 +42,10 @@ enum PIN_STATE_e {
 #define PIN_W5500_SCS ((Pin_t)15)
 #define PIN_W5500_INT ((Pin_t)27)
 #define PIN_W5500_RST ((Pin_t)26)
+#define PIN_US_TRIG ((Pin_t)25)
+#define PIN_US_L_ECHO ((Pin_t)34)
+#define PIN_US_C_ECHO ((Pin_t)35)
+#define PIN_US_R_ECHO ((Pin_t)32)
 /// GENERATED SECTION | END   /////////////////////////////////////////////////
 
 #ifdef __cplusplus
