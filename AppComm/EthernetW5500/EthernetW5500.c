@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#define READ_AFTER_WRITE_LOG_EN 1
+/// #define READ_AFTER_WRITE_LOG_EN 1
 
 #ifndef READ_AFTER_WRITE_LOG_EN
     #define READ_AFTER_WRITE_LOG_EN 0
