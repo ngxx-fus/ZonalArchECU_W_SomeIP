@@ -1,0 +1,67 @@
+sequenceDiagram
+    title W5500 System Boot Sequence
+
+    participant CPU as CPU / app_main
+    participant CTL as TaskW5500Ctl (W5500CommCtl)
+    participant COMM as TaskW5500Comm
+    participant SPI as SPI Driver
+    participant W5500 as W5500 (Hardware)
+    participant ISR as ISR (GPIO INT)
+
+    Note over CPU:
+    CPU ->> CPU: app_main()
+    CPU ->> CPU: AppInit()
+    
+    Note right of CPU: Create Control Task
+    CPU ->> CTL: xTaskCreate(W5500CommCtl)
+
+    activate CTL
+    CTL ->> CTL: RxedPacket_Init()
+    Note right of CTL: Create RxedPacket_Lock Mutex
+    
+    CTL ->> CTL: W5500_Create()
+    CTL ->> SPI: spi_bus_initialize + spi_bus_add_device
+    CTL ->> W5500: GPIO SCS=1, RST=1
+    CTL ->> ISR: gpio_isr_handler_add(INT, W5500_IsrHandler)
+    CTL ->> CTL: W5500_InitLock()
+    Note right of CTL: Create W5500_Lock Mutex
+
+    CTL ->> CTL: W5500CommCtl_Init()
+    
+    Note over CTL, W5500: --- Phase A: Reset & Sanity Check ---
+    CTL ->> SPI: Write MR (0x0000, Common) = 0x80
+    SPI ->> W5500: [00 00] [04] [80]
+    W5500 -->> SPI: Hardware Reset Ack
+    
+    CTL ->> SPI: Read VERSIONR (0x0039, Common)
+    SPI ->> W5500: [00 39] [00]
+    W5500 -->> SPI: Return 0x04 (W5500 Version)
+    SPI -->> CTL: Confirm HW Supported
+
+    Note over CTL, W5500: --- Phase B: Network Config ---
+    CTL ->> SPI: Write GAR (Gateway), SUBR (Subnet), SIPR (IP), SHAR (MAC)
+    SPI ->> W5500: Burst Write Common Regs
+
+    Note over CTL, W5500: --- Phase C: Interrupt & Socket Setup ---
+    CTL ->> SPI: Write IMR=0x81, INTLEVEL=0x03E8
+    CTL ->> SPI: Clear Ghost IR/SIR (Read then Write back)
+    CTL ->> SPI: Write Sn_IMR=0x14 (RECV & SEND_OK)
+    CTL ->> SPI: Write Sn_MR=0x04 (MACRAW)
+    CTL ->> SPI: Write Sn_CR=0x01 (OPEN)
+    W5500 -->> SPI: Socket 0 Status -> SOCK_MACRAW
+    CTL ->> SPI: Write SIMR=0x01, Sn_RXBUF_SIZE=0x08 (8KB)
+
+    Note right of CTL: Create Communication Task
+    CTL ->> COMM: xTaskCreate(W5500_TaskComm)
+    CTL ->> CTL: Save W5500CommCtl_TaskHandler
+    
+    activate COMM
+    Note over COMM: TaskW5500Comm Startup
+    COMM ->> CTL: xTaskNotifyGive(W5500CommCtl_TaskHandler)
+    CTL -->> COMM: Task Notified
+    COMM ->> COMM: ulTaskNotifyTake(wait forever)
+    deactivate COMM
+    
+    Note over CTL: Join forever loop
+    CTL ->> CTL: ulTaskNotifyTake(pdMS_TO_TICKS(5000))
+    deactivate CTL
