@@ -15,20 +15,24 @@ extern SemaphoreHandle_t    MotorLock;    /* Mutex for synchronized motor access
 /// @brief Set speed for Motor 0 (Channel A)
 /// @param Speed Target speed value (-1023 to 1023)
 /// @return ReturnCode_t STAT_OKE if successful
-ReturnCode_t MotorSetSpeed0(int Speed);
+ReturnCode_t MotorSetSpeed0(int32_t Speed);
 
 /// @brief Set speed for Motor 1 (Channel B)
 /// @param Speed Target speed value (-1023 to 1023)
 /// @return ReturnCode_t STAT_OKE if successful
-ReturnCode_t MotorSetSpeed1(int Speed);
+ReturnCode_t MotorSetSpeed1(int32_t Speed);
 
 /// @brief Get current speed of Motor 0
-/// @return int Current speed value
-int MotorGetSpeed0(void);
+/// @return int32_t Current speed value
+int32_t MotorGetSpeed0(void);
 
 /// @brief Get current speed of Motor 1
-/// @return int Current speed value
-int MotorGetSpeed1(void);
+/// @return int32_t Current speed value
+int32_t MotorGetSpeed1(void);
+
+/// @brief Stop all motor for Emergency case
+/// @return int32_t Status of the action
+ReturnCode_t EmergencyStop(void);
 
 /* --- SERVICE RUNTIME --- */
 

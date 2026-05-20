@@ -13,9 +13,9 @@
 typedef struct AppService_t{
     char            Name[50];
     void            (*Service)(void *); /* Use proper function pointer type */
-    int             StackSize;
+    int32_t             StackSize;
     void*           Param;
-    int             Priority;
+    int32_t             Priority;
     TaskHandle_t    Handle;
 } AppService_t;
 

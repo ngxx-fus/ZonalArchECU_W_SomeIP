@@ -14,7 +14,7 @@ PacketSlot_t TxPool[MAX_NUM_TXED_PACKETS];
  */
 void RxedPacket_Init() {
     /* Initialize every slot in the pools to an available state */
-    for (int i = 0; i < MAX_NUM_RXED_PACKETS; i++) {
+    for (int32_t i = 0; i < MAX_NUM_RXED_PACKETS; i++) {
         atomic_init(&RxPool[i].State, SLOT_FREE);
         RxPool[i].Size = 0;
         atomic_init(&TxPool[i].State, SLOT_FREE);
@@ -39,7 +39,7 @@ ReturnCode_t RxedPacket_Push(EthSize_t Size, GenericPtr_t Payload, uint8_t* src_
     }
 
     /* Iterate through the Rx pool to find an available FREE slot */
-    for (int i = 0; i < MAX_NUM_RXED_PACKETS; i++) {
+    for (int32_t i = 0; i < MAX_NUM_RXED_PACKETS; i++) {
         uint_fast8_t expected = SLOT_FREE;
         
         /* Attempt to atomically transition state from FREE to WRITING */
@@ -70,11 +70,11 @@ ReturnCode_t RxedPacket_Push(EthSize_t Size, GenericPtr_t Payload, uint8_t* src_
  * @return Pointer to the locked PacketSlot_t, or NULL if none found.
  */
 PacketSlot_t* RxedPacket_GetHighestPriority() {
-    int best_idx = -1;
+    int32_t best_idx = -1;
     uint32_t highest_priority = 0xFFFFFFFF;
 
     /* Scan all slots to identify the one with the lowest priority value (highest priority) */
-    for (int i = 0; i < MAX_NUM_RXED_PACKETS; i++) {
+    for (int32_t i = 0; i < MAX_NUM_RXED_PACKETS; i++) {
         /* Check if the current slot is in READY state */
         if (atomic_load(&RxPool[i].State) == SLOT_READY) {
             
@@ -135,7 +135,7 @@ ReturnCode_t RxedPacket_Size() {
     uint8_t count = 0;
     
     /* Accumulate count of all slots currently marked as READY */
-    for (int i = 0; i < MAX_NUM_RXED_PACKETS; i++) {
+    for (int32_t i = 0; i < MAX_NUM_RXED_PACKETS; i++) {
         /* Atomic load to ensure state consistency during count */
         if (atomic_load(&RxPool[i].State) == SLOT_READY) 
         {
@@ -151,7 +151,7 @@ ReturnCode_t RxedPacket_Size() {
 ReturnCode_t TxPacket_Push(EthSize_t Size, GenericPtr_t Payload, uint8_t* dst_ip, uint16_t dst_port, uint8_t* dst_mac) {
     if (Size > 1500 || Payload.Void == NULL) return STAT_ERR_INVALID_ARG;
 
-    for (int i = 0; i < MAX_NUM_TXED_PACKETS; i++) {
+    for (int32_t i = 0; i < MAX_NUM_TXED_PACKETS; i++) {
         uint_fast8_t expected = SLOT_FREE;
         
         if (atomic_compare_exchange_strong(&TxPool[i].State, &expected, SLOT_WRITING)) {
@@ -170,10 +170,10 @@ ReturnCode_t TxPacket_Push(EthSize_t Size, GenericPtr_t Payload, uint8_t* dst_ip
 }
 
 PacketSlot_t* TxPacket_GetHighestPriority() {
-    int best_idx = -1;
+    int32_t best_idx = -1;
     uint32_t highest_priority = 0xFFFFFFFF;
 
-    for (int i = 0; i < MAX_NUM_TXED_PACKETS; i++) {
+    for (int32_t i = 0; i < MAX_NUM_TXED_PACKETS; i++) {
         if (atomic_load(&TxPool[i].State) == SLOT_READY) {
             uint8_t current_priority = TxPool[i].Data[0];
             if (best_idx == -1 || current_priority < highest_priority) {
@@ -204,7 +204,7 @@ ReturnCode_t TxPacket_Empty() {
 
 ReturnCode_t TxPacket_Size() {
     uint8_t count = 0;
-    for (int i = 0; i < MAX_NUM_TXED_PACKETS; i++) {
+    for (int32_t i = 0; i < MAX_NUM_TXED_PACKETS; i++) {
         if (atomic_load(&TxPool[i].State) == SLOT_READY) count++;
     }
     return count;

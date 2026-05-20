@@ -75,7 +75,7 @@ ReturnCode_t ConvertIPv4AddressToByteArr(char IPv4Str[], uint8_t IPv4Addr[]) {
     }
 
     /* assign results with casting */
-    for (int i = 0; i < 4; i++) {
+    for (int32_t i = 0; i < 4; i++) {
         IPv4Addr[i] = (uint8_t)ip[i];
     }
 

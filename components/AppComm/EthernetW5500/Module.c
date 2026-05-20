@@ -44,11 +44,11 @@ static void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMA
     /* Iterate through the data buffer and generate a hex/ASCII dump 8 bytes at a time */
     for (Word_t i = 0; i < Size; i += 8) {
         char line_buf[128];
-        int pos = 0;
+        int32_t pos = 0;
         pos += sprintf(line_buf + pos, "%04X: ", i);
 
         /* Hex Data */
-        for (int j = 0; j < 8; j++) {
+        for (int32_t j = 0; j < 8; j++) {
             if ((i + j) < Size) {
                 pos += sprintf(line_buf + pos, "%02X", pData[i + j]);
             } else {
@@ -62,7 +62,7 @@ static void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMA
         pos += sprintf(line_buf + pos, " | ");
 
         /* ASCII Data */
-        for (int j = 0; j < 8 && (i + j) < Size; j++) {
+        for (int32_t j = 0; j < 8 && (i + j) < Size; j++) {
             Byte_t byte = pData[i + j];
             if (byte >= 0x20 && byte <= 0x7E) {
                 pos += sprintf(line_buf + pos, "%c", byte);
@@ -331,7 +331,7 @@ ReturnCode_t W5500CommCtl_Init(EthernetW5500_t * Eth) {
     W5500_WriteByteReg(Eth, eBSB_Socket1Register, eSn_TXBUF_SIZE, 8); /* 8KB */
     #endif
     /* S2-S7 are not used, set their buffers to 0KB */
-    for (int i = 2; i < 8; i++) {
+    for (int32_t i = 2; i < 8; i++) {
         W5500_WriteByteReg(Eth, eBSB_Socket0Register + (i * 4), eSn_RXBUF_SIZE, 0);
         W5500_WriteByteReg(Eth, eBSB_Socket0Register + (i * 4), eSn_TXBUF_SIZE, 0);
     }
@@ -497,7 +497,6 @@ void W5500CommRuntime(void* arg){
     /*Runtime service to handle internal communication*/
     SysLog("W5500CommCtl(...) : Join forever loop...");
     while (1) {
-        uint64_t Data;
         SysLog("W5500CommCtl(...) : W5500 version=%X", W5500_GetModuleVersion(Eth));
 
         SysLog("W5500CommCtl(...):  Check RxedPacket and log...");

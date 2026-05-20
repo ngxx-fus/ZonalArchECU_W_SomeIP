@@ -17,7 +17,7 @@ typedef uint32_t    Dword_t;
 /// @brief 64-bit unsigned integer type
 typedef uint64_t    Qword_t;
 
-/// @brief Ethernet size type (16-bit unsigned int, but valid range from 1500 to 0xFFFF)
+/// @brief Ethernet size type (16-bit unsigned int32_t, but valid range from 1500 to 0xFFFF)
 typedef Word_t      EthSize_t;
 
 // /// @brief Generic pointer
@@ -53,13 +53,13 @@ typedef union EthMACAddr_t {
 
 /// @brief IPv4 Address structure for flexible access as a 32-bit word or 4 individual bytes
 typedef union IPv4Addr_t {
-    uint32_t Dword;             ///< 32-bit unsigned int
+    uint32_t Dword;             ///< 32-bit unsigned int32_t
     uint8_t Byte[4];            ///< 8-bit unsigned array
 } IPv4Addr_t;
 
 /// @brief Type of a IPv4 port
 typedef union IPv4Port_t {
-    uint16_t Word;              ///< 16-bit unsigned int
+    uint16_t Word;              ///< 16-bit unsigned int32_t
     uint8_t Byte[2];            ///< 8-bit unsigned array
 } IPv4Port_t;
 

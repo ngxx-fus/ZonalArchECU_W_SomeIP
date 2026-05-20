@@ -3,11 +3,13 @@
 HBridge_t *         Motor = NULL;               /// Global Motor struct
 SemaphoreHandle_t   MotorLock = NULL;           /// Mutex for thread-safe Motor access
 
+static volatile uint8_t IsEmergencyStopped = 0; /// Flag to lock motor runtime when emergency occurs
 
 /// @brief Set speed for Motor 0 (Channel A)
 /// @param Speed Target speed value (-1023 to 1023)
 /// @return ReturnCode_t STAT_OKE if successful
-ReturnCode_t MotorSetSpeed0(int Speed) {
+ReturnCode_t MotorSetSpeed0(int32_t Speed) {
+    if (IsEmergencyStopped) return STAT_ERR;
     if (MotorLock == NULL || Motor == NULL) return STAT_ERR_NULL;
 
     /* lock resource and update speed0 */
@@ -22,7 +24,8 @@ ReturnCode_t MotorSetSpeed0(int Speed) {
 /// @brief Set speed for Motor 1 (Channel B)
 /// @param Speed Target speed value (-1023 to 1023)
 /// @return ReturnCode_t STAT_OKE if successful
-ReturnCode_t MotorSetSpeed1(int Speed) {
+ReturnCode_t MotorSetSpeed1(int32_t Speed) {
+    if (IsEmergencyStopped) return STAT_ERR;
     if (MotorLock == NULL || Motor == NULL) return STAT_ERR_NULL;
 
     /* lock resource and update speed1 */
@@ -35,9 +38,9 @@ ReturnCode_t MotorSetSpeed1(int Speed) {
 }
 
 /// @brief Get current speed of Motor 0
-/// @return int Current speed value
-int MotorGetSpeed0(void) {
-    int val = 0;
+/// @return int32_t Current speed value
+int32_t MotorGetSpeed0(void) {
+    int32_t val = 0;
     /* safe read motor0 speed */
     if (MotorLock && xSemaphoreTake(MotorLock, portMAX_DELAY) == pdTRUE) {
         val = Motor->Speed0;
@@ -47,15 +50,36 @@ int MotorGetSpeed0(void) {
 }
 
 /// @brief Get current speed of Motor 1
-/// @return int Current speed value
-int MotorGetSpeed1(void) {
-    int val = 0;
+/// @return int32_t Current speed value
+int32_t MotorGetSpeed1(void) {
+    int32_t val = 0;
     /* safe read motor1 speed */
     if (MotorLock && xSemaphoreTake(MotorLock, portMAX_DELAY) == pdTRUE) {
         val = Motor->Speed1;
         xSemaphoreGive(MotorLock);
     }
     return val;
+}
+
+/// @brief Stop all motor for Emergency case
+/// @return ReturnCode_t Status of the action
+ReturnCode_t EmergencyStop(void) {
+    if (MotorLock == NULL || Motor == NULL) return STAT_ERR_NULL;
+    if (IsEmergencyStopped) {
+        SysWarn("EmergencyStop(...): Motor is already in Emergency Stop state!");
+        return STAT_OKE; // Already stopped
+    }
+
+    /* lock resource and stop both motors immediately */
+    if (xSemaphoreTake(MotorLock, portMAX_DELAY) == pdTRUE) {
+        IsEmergencyStopped = 1;
+        HBridge_SetSpeed(Motor, 0, 0);
+        HBridge_Apply(Motor); // Force apply to hardware immediately
+        xSemaphoreGive(MotorLock);
+        SysLog("EmergencyStop(...): Motor stopped! (Emergency case)");
+        return STAT_OKE;
+    }
+    return STAT_ERR;
 }
 
 /* --- SERVICE RUNTIME --- */
@@ -79,6 +103,12 @@ void MotorRuntime(void* arg) {
 
     SysLog("[AppService_HBridge] Join forever loop...");
     while (1) {
+        /* If ECU is in emergency state, block task from applying any further settings */
+        if (IsEmergencyStopped) {
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
+
         /* check and apply flags if any changes detected */
         if (xSemaphoreTake(MotorLock, pdMS_TO_TICKS(10)) == pdTRUE) {
             if (Motor->Flag != 0) {

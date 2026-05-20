@@ -583,7 +583,7 @@ ReturnCode_t W5500_ReadNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_t
         char rd_str[19] = {0};
         Word_t read_len = (Len > 6) ? 6 : Len;
 
-        for (int i = 0; i < read_len; i++) {
+        for (int32_t i = 0; i < read_len; i++) {
             sprintf(&rd_str[i * 3], "%02X ", Buffer[i]);
         }
         
@@ -621,7 +621,7 @@ ReturnCode_t W5500_WriteNByteReg(EthernetW5500_t* Ptr, Word_t BLockSelNum, Word_
         W5500_ReadNByte(Ptr, read_buf, read_len);
 
         /* Format hexadecimal string representations */
-        for (int i = 0; i < read_len; i++) {
+        for (int32_t i = 0; i < read_len; i++) {
             sprintf(&wr_str[i * 3], "%02X ", Data[i]);
             sprintf(&rd_str[i * 3], "%02X ", read_buf[i]);
         }

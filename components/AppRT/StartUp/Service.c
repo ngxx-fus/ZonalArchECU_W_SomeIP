@@ -22,7 +22,7 @@ ReturnCode_t AppInit() {
 	/* Initialize and validate each service before task creation */
 	SysEntry("AppInit");
 
-	for (int i = 0; i < (sizeof(ServiceList) / sizeof(ServiceList[0])); i++) {
+	for (int32_t i = 0; i < (sizeof(ServiceList) / sizeof(ServiceList[0])); i++) {
 		AppService_t *srv = &ServiceList[i];
 		SysLog("[AppInit] Start service %s", srv->Name);
 

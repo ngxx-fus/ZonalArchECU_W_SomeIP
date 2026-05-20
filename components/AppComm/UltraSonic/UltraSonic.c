@@ -77,7 +77,7 @@ static ReturnCode_t HCSR04_ReadOneRaw(UltraSonic_t *ptr, uint8_t index, uint32_t
 	while (gpio_get_level(echoPin) == 0) {
 		if (esp_timer_get_time() > timeout_at) {
 			SysLog("[HCSR04] sensor %u timeout waiting ECHO HIGH (ECHO=%d)",
-				   (unsigned)index, (int)echoPin);
+				   (unsigned)index, (int32_t)echoPin);
 			return STAT_ERR_TIMEOUT;
 		}
 	}
@@ -87,7 +87,7 @@ static ReturnCode_t HCSR04_ReadOneRaw(UltraSonic_t *ptr, uint8_t index, uint32_t
 	while (gpio_get_level(echoPin) == 1) {
 		if (esp_timer_get_time() > timeout_at) {
 			SysLog("[HCSR04] sensor %u timeout waiting ECHO LOW (ECHO=%d)",
-				   (unsigned)index, (int)echoPin);
+				   (unsigned)index, (int32_t)echoPin);
 			return STAT_ERR_TIMEOUT;
 		}
 	}

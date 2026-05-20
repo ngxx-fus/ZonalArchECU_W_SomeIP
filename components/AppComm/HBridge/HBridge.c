@@ -61,7 +61,7 @@ HBridge_t * HBridge_Create(Pin_t IN0, Pin_t IN1, Pin_t IN2, Pin_t IN3) {
     Ptr->Config.Timer[1] = LEDC_TIMER_1;
     Ptr->Config.Frequency[1] = 1000;
 
-    for (int i = 0; i < 4; i++) {
+    for (int32_t i = 0; i < 4; i++) {
         Ptr->Config.Channels[i] = (ledc_channel_t)i;
         Ptr->PrevIN[i] = 0xFF;
     }
@@ -83,7 +83,7 @@ ReturnCode_t HBridge_Apply(HBridge_t * Ptr) {
     if (SafeFlagHas(&Ptr->Flag, eHBridge_ModifiedPin)) {
         __IHF__SetTimer(Ptr, 0);
         __IHF__SetTimer(Ptr, 1);
-        for (int i = 0; i < 4; i++) {
+        for (int32_t i = 0; i < 4; i++) {
             __IHF__RegisterGPIO(Ptr, i);
         }
         SafeFlagClear(&Ptr->Flag, eHBridge_ModifiedPin);
@@ -93,7 +93,7 @@ ReturnCode_t HBridge_Apply(HBridge_t * Ptr) {
     if (SafeFlagHas(&Ptr->Flag, eHBridge_ModifiedSpeed)) {
         uint32_t MaxDuty = (1UL << Ptr->Config.Resolution) - 1;
 
-        for (int i = 0; i < 2; i++) {
+        for (int32_t i = 0; i < 2; i++) {
             uint8_t Base = i * 2;
             uint32_t Fwd = (Ptr->Speed[i] > 0) ? (uint32_t)Ptr->Speed[i] : 0;
             uint32_t Rev = (Ptr->Speed[i] < 0) ? (uint32_t)(-Ptr->Speed[i]) : 0;

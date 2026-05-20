@@ -37,14 +37,30 @@ void HeartBeatRuntime(void* arg) {
         uint16_t dist1_cm = (dist1_mm != 0xFFFFU) ? (dist1_mm / 10U) : 0x3FF;
         uint16_t dist2_cm = (dist2_mm != 0xFFFFU) ? (dist2_mm / 10U) : 0x3FF;
 
+        /* --- FAIL-SAFE CHECK --- */
+        /* Check if any sensor distance is below the emergency threshold */
+        if (dist0_cm < SF_ETT_Distance[0]) {
+            SysErr("HeartBeatRuntime: EMERGENCY! Sensor 0 distance (%u cm) is below threshold (%u cm).", dist0_cm, SF_ETT_Distance[0]);
+            EmergencyStop();
+        }
+        if (dist1_cm < SF_ETT_Distance[1]) {
+            SysErr("HeartBeatRuntime: EMERGENCY! Sensor 1 distance (%u cm) is below threshold (%u cm).", dist1_cm, SF_ETT_Distance[1]);
+            EmergencyStop();
+        }
+        if (dist2_cm < SF_ETT_Distance[2]) {
+            SysErr("HeartBeatRuntime: EMERGENCY! Sensor 2 distance (%u cm) is below threshold (%u cm).", dist2_cm, SF_ETT_Distance[2]);
+            EmergencyStop();
+        }
+
         /* 2. Pack the retrieved information into the ECU state structure */
         ecuState.Distance.Fields.D0 = dist0_cm & 0x3FF;
         ecuState.Distance.Fields.D1 = dist1_cm & 0x3FF;
         ecuState.Distance.Fields.D2 = dist2_cm & 0x3FF;
         ecuState.Distance.Fields.SyncNum = sync_num & 0x03;
 
-        ecuState.Motor.Fields.M0 = rand() & 0x3FF; /* Random 10-bit value for M0 */
-        ecuState.Motor.Fields.M1 = rand() & 0x3FF; /* Random 10-bit value for M1 */
+        /* Get actual motor speeds (absolute value to fit 10-bit unsigned field) */
+        ecuState.Motor.Fields.M0 = (abs(MotorGetSpeed0())) & 0x3FF;
+        ecuState.Motor.Fields.M1 = (abs(MotorGetSpeed1())) & 0x3FF;
         ecuState.Motor.Fields.SyncNum = sync_num & 0x03;
         ecuState.Motor.Fields.Reserved = 0;
         

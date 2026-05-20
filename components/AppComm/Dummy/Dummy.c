@@ -57,8 +57,8 @@ void Dummy_Jitter(void * arg) {
     SysLog("[Random] Starting slow random jitter loop...");
     while (1) {
         /* Generate random speeds for both channels within 10-bit range */
-        int s0 = (rand() % 2047) - 1023;
-        int s1 = (rand() % 2047) - 1023;
+        int32_t s0 = (rand() % 2047) - 1023;
+        int32_t s1 = (rand() % 2047) - 1023;
 
         /* Apply chaos to both motors and log values */
         MotorSetSpeed0(s0);
@@ -76,8 +76,8 @@ void Dummy3(void * arg){
     SysLog("[Random] Starting slow random jitter loop...");
     while (1) {
         /* Generate random speeds for both channels within 10-bit range */
-        int s0 = (rand() % 2047) - 1023;
-        int s1 = (rand() % 2047) - 1023;
+        int32_t s0 = (rand() % 2047) - 1023;
+        int32_t s1 = (rand() % 2047) - 1023;
 
         /* Apply chaos to both motors and log values */
         MotorSetSpeed0(s0);

@@ -21,7 +21,7 @@ DefaultRet_t SafeFlagHas(SafeFlag_t *f, uint32_t i) {
 uint32_t GenerateRandomNumber(uint32_t SeedInput) {
     // --- 1. Persistent state ---
     static uint32_t last_known_random_state = 104729u; // initialized with a prime
-    static int last_known_seed_input = 0;
+    static int32_t last_known_seed_input = 0;
 
     uint32_t x;
 
@@ -63,7 +63,7 @@ uint32_t GenerateRandomNumber(uint32_t SeedInput) {
 }
 
 #if (ESP_ERR_CONVERT_EN == 1)
-    DefaultRet_t ESPReturnType2DefaultReturnType(int espErr) {
+    DefaultRet_t ESPReturnType2DefaultReturnType(int32_t espErr) {
         switch (espErr) {
             case ESP_OK:                        return STAT_OKE;
             case ESP_FAIL:                      return STAT_ERR;

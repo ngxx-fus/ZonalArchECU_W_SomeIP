@@ -9,16 +9,19 @@ extern "C" {
  #define __ZECU_DISABLED__ 1
 #endif
 
-#ifdef PRINT_HEADER_COMPILE_MESSAGE
-#pragma message ("AppConfig/All.h")
-#endif /// PRINT_HEADER_COMPILE_MESSAGE
-
 #include <stdint.h>
 #include <stdlib.h>
 
 #include "Comm/Comm.h"
 #include "Pinout/Pinout.h"
 #include "SystemLog.h"
+
+#if 1 /*SAFETY SET-UP*/
+
+    /// @brief Set-up of emergency trigger thresold distance list
+    extern const uint16_t SF_ETT_Distance[];
+
+#endif /**/
 
 #ifdef __cplusplus
 }

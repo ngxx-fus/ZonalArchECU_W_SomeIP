@@ -106,7 +106,7 @@ ReturnCode_t GetVariableByte(void* Payload, EthSize_t Size, void* VarByte) {
     else {
         Byte_t* p = (Byte_t*)Payload;
         Byte_t* v = (Byte_t*)VarByte;
-        for (int i = 0; i < 8; i++) {
+        for (int32_t i = 0; i < 8; i++) {
             v[i] = p[VariableByteIndex[i]];
         }
         return STAT_OKE;
@@ -126,7 +126,7 @@ ReturnCode_t SetVariableByte(void* Payload, EthSize_t Size, void* VarByte) {
     else {
         Byte_t* p = (Byte_t*)Payload;
         Byte_t* v = (Byte_t*)VarByte;
-        for (int i = 0; i < 8; i++) {
+        for (int32_t i = 0; i < 8; i++) {
             p[VariableByteIndex[i]] = v[i];
         }
         return STAT_OKE;
@@ -151,7 +151,7 @@ ReturnCode_t VerifyFixedByte(GenericPtr_t Data, EthSize_t Size) {
             uint8_t isVariable = 0;
 
             /* Check if the current index is one of the 8 variable bytes */
-            for (int j = 0; j < 8; j++) {
+            for (int32_t j = 0; j < 8; j++) {
                 if (i == VariableByteIndex[j]) {
                     isVariable = 1;
                     break;

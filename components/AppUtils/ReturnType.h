@@ -71,9 +71,9 @@ typedef enum {
     #include "esp_err.h"
     
     /// @brief  Convert generic ESP return codes to project DefaultRet_t
-    /// @param  espErr ESP error code (int or esp_err_t)
+    /// @param  espErr ESP error code (int32_t or esp_err_t)
     /// @return DefaultRet_t Corresponding system status code
-    DefaultRet_t ESPReturnType2DefaultReturnType(int espErr);
+    DefaultRet_t ESPReturnType2DefaultReturnType(int32_t espErr);
 #endif
 
 /// @brief  Get string representation of a DefaultRet_t status
