@@ -1,10 +1,7 @@
 #ifndef __NETWORK_H__
 #define __NETWORK_H__
 
-#include <stdint.h>
-#include "stdio.h"
-#include "string.h"
-#include "../../AppUtils/ReturnType.h"
+#include "../__CommonHeaders.h"
 
 /* NETWORK DEFINITION ***********************************************************************************************************/
 

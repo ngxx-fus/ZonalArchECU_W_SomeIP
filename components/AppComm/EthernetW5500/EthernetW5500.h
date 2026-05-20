@@ -3,9 +3,7 @@
 
 #include <stdint.h>
 
-#include "../../AppUtils/All.h"
-#include "../../AppConfig/All.h"
-#include "../../AppESPWrap/All.h"
+#include "../__CommonHeaders.h"
 
 #include "Network.h"
 #include "EthernetW5500Cmds.h"

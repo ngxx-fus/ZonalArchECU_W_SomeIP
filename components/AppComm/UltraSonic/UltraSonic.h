@@ -3,9 +3,7 @@
 
 #include <stdint.h>
 
-#include "../../AppConfig/All.h"
-#include "../../AppUtils/All.h"
-#include "../../AppESPWrap/All.h"
+#include "../__CommonHeaders.h"
 
 typedef struct UltraSonicSensor_t {
 	Pin_t Trig;

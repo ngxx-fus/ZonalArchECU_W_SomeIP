@@ -12,7 +12,7 @@ uint16_t HCSR04_GetLatestDistanceMm(uint8_t index) {
     return dist;
 }
 
-void HCSR04Ctl(void *arg) {
+void HCSR04Runtime(void *arg) {
     (void)arg;
     SysEntry("HCSR04Ctl");
 

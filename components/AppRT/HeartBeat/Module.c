@@ -1,16 +1,7 @@
 #include "Module.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 
-#include "../../AppUtils/All.h"
-#include "../../AppESPWrap/All.h"
-
-/* Include communication and E2E modules */
-#include <stdlib.h>
-#include "../AppComm/EthernetW5500/Module.h"
-#include "../AppComm/EthernetW5500/E2E.h"
-#include "../AppComm/Routing/SyncFrame.h"
-#include "../AppComm/UltraSonic/Module.h"
+#include "../__CommonHeaders.h"
+#include "../../AppComm/SharedAPIs.h"
 
 /**
  * @brief Mock function to retrieve H-Bridge motor speed.

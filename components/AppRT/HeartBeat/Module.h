@@ -1,8 +1,6 @@
 #ifndef __APP_HEART_H__
 #define __APP_HEART_H__
 
-#include "../../AppConfig/All.h"
-
 #ifndef HEART_TASK_CYCLE_MS
     /* Configure cycle time and routing table definitions */
     #define HEART_TASK_CYCLE_MS 300

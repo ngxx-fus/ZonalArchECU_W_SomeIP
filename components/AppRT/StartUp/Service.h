@@ -2,15 +2,10 @@
 
 
 /*Project pre-config*/
-#include "../AppConfig/All.h"
-#include "../AppUtils/All.h"
-#include "../AppESPWrap/All.h"
+#include "../__CommonHeaders.h"
 
 /*Project modules*/
-#include "../AppComm/EthernetW5500/Module.h"
-#include "../AppComm/HBridge/Module.h"
-#include "../AppComm/Dummy/Dummy.h"
-#include "../AppComm/UltraSonic/Module.h"
+#include "../AppComm/SharedAPIs.h"
 
 #include "HeartBeat/Module.h"
 
@@ -29,3 +24,4 @@ extern AppService_t ServiceList[];
 
 /// @brief Initialize application
 ReturnCode_t AppInit();
+

@@ -4,6 +4,8 @@
 #define SOCKET_0_MACRAW_EN 0
 #define SOCKET_1_UDP_EN    1
 
+#include "../__CommonHeaders.h"
+
 #include "EthernetW5500.h"
 #include "PacketQueue.h"
 

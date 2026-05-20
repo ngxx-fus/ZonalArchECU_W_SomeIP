@@ -6,9 +6,7 @@
 #include "driver/ledc.h"
 
 /* Project dependency headers */
-#include "../../AppUtils/FlagControl.h"
-#include "../../AppUtils/ReturnType.h"
-#include "../../AppConfig/Pinout/Pinout.h"
+#include "../__CommonHeaders.h"
 
 /// @brief Status flags for H-Bridge operations
 enum HBridge_e {

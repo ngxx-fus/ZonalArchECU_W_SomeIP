@@ -5,6 +5,10 @@
 extern "C" {
 #endif
 
+#if 0
+ #define __ZECU_DISABLED__ 1
+#endif
+
 #ifdef PRINT_HEADER_COMPILE_MESSAGE
 #pragma message ("AppConfig/All.h")
 #endif /// PRINT_HEADER_COMPILE_MESSAGE

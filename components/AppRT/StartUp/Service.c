@@ -7,10 +7,10 @@
 /// @brief List of services to be startup
 AppService_t ServiceList[] = {
     /*name*/                /*function ptr*/        /*Stack Size*//*ParamPtr*//*Priority*/          /*TaskHandle*/
-    {"MotorCtl",            MotorCtl,               2048,           NULL,       eTask_RealTime,     0},
-    {"Eth",                 W5500CommCtl,     		2048,           NULL,       eTask_Normal,       0},
-    {"HCSR04Ctl",           HCSR04Ctl,              2048,           NULL,       eTask_Normal,       0},
-    {"Heart",               HeartCtl,               2048,           NULL,       eTask_Normal,       0},
+    {"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0},
+    {"EthRuntime",              W5500CommRuntime,     		2048,           NULL,       eTask_Normal,       0},
+    {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0},
+    {"HeartBeatRuntime",        HeartBeatRuntime,               2048,           NULL,       eTask_Normal,       0},
     // {"Chaos_Zero",       Dummy0,                 2048,           NULL,       eTask_Normal,       0},
     // {"Chaos_Max",        Dummy1,                 2048,           NULL,       eTask_Low,          0},
     // {"Chaos_Jitter",     Dummy_Jitter,           2048,           NULL,       eTask_Background,   0},
