@@ -11,6 +11,5 @@ cmake_minimum_required(VERSION 3.22)
 ##DEPRECATED##     "AppRT"
 ##DEPRECATED## )
 
-
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(ZonalArchECU_W_SomeIP)
