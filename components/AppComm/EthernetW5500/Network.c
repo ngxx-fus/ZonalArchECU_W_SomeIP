@@ -59,6 +59,19 @@ ReturnCode_t ConvertByteArr2IPvToAddress(uint8_t IPv4Addr[], char IPv4Str[]) {
     return STAT_OKE;
 }
 
+/// @brief Convert a 4-byte array to a 32-bit unsigned integer
+/// @param IPv4Addr Input array of 4 bytes
+/// @return uint32_t The packed 32-bit IP address in Network Byte Order
+uint32_t ConvertIPv4ByteArr2Uint32(uint8_t IPv4Addr[]) {
+    if (IPv4Addr == NULL) {
+        return 0;
+    }
+    return ((uint32_t)IPv4Addr[0] << 24) | 
+           ((uint32_t)IPv4Addr[1] << 16) | 
+           ((uint32_t)IPv4Addr[2] << 8)  | 
+           ((uint32_t)IPv4Addr[3]);
+}
+
 /// @brief Convert an IPv4 string to a 4-byte array
 /// @param IPv4Str Input dotted-decimal string
 /// @param IPv4Addr Output array of 4 bytes

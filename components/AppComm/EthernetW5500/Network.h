@@ -117,6 +117,11 @@ uint16_t CopyGenericPayload(GenericPayload_t * GP_Ptr_Src, GenericPayload_t * GP
 /// @return ReturnCode_t STAT_OKE if successful
 ReturnCode_t ConvertByteArr2IPvToAddress(uint8_t IPv4Addr[], char IPv4Str[]);
 
+/// @brief Convert a 4-byte array to a 32-bit unsigned integer
+/// @param IPv4Addr Input array of 4 bytes
+/// @return uint32_t The packed 32-bit IP address in Network Byte Order
+uint32_t ConvertIPv4ByteArr2Uint32(uint8_t IPv4Addr[]);
+
 /// @brief Convert an IPv4 string to a 4-byte array
 /// @param IPv4Str Input dotted-decimal string
 /// @param IPv4Addr Output array of 4 bytes

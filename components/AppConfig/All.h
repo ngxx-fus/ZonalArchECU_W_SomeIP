@@ -5,7 +5,7 @@
 extern "C" {
 #endif
 
-#if 0
+#if 1
  #define __ZECU_DISABLED__ 1
 #endif
 

@@ -1,3 +1,18 @@
+cmake_minimum_required(VERSION 3.31)
+
+# --- Path Definitions ---
+set(PINOUT_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/Pinout.h")
+set(PINOUT_DEF    "${CMAKE_CURRENT_SOURCE_DIR}/Pinout/Pinout.h.def")
+set(PINOUT_CNF    "${CMAKE_CURRENT_SOURCE_DIR}/Pinout/Pinout.cnf")
+
+set(COMM_HEADER   "${CMAKE_CURRENT_SOURCE_DIR}/Comm.h")
+set(COMM_SOURCE   "${CMAKE_CURRENT_SOURCE_DIR}/Comm/Comm.c")
+set(COMM_DEF_H    "${CMAKE_CURRENT_SOURCE_DIR}/Comm/Comm.h.def")
+set(COMM_DEF_C    "${CMAKE_CURRENT_SOURCE_DIR}/Comm/Comm.c.def")
+set(COMM_CNF      "${CMAKE_CURRENT_SOURCE_DIR}/Comm/Comm.cnf")
+
+# --- Auto-Scanning Sources and Includes ---
+
 # Check if CMake is running in script mode
 if(CMAKE_SCRIPT_MODE_FILE)
     file(GLOB_RECURSE srcs "*.c")
@@ -14,16 +29,57 @@ foreach(hdr_file ${hdrs})
     list(APPEND auto_include_dirs ${rel_dir})
 endforeach()
 
-# Clean up duplicated items
+# Clean up duplicated include items
 if(auto_include_dirs)
     list(REMOVE_DUPLICATES auto_include_dirs)
 endif()
 
-# Register component
+# Explicitly append the generated C file
+list(APPEND srcs "${COMM_SOURCE}")
+if(srcs)
+    list(REMOVE_DUPLICATES srcs)
+endif()
+
+# --- Component Registration ---
+
+# MUST be called before any custom commands/targets
 idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS ${auto_include_dirs}
 )
+
+# --- Custom Commands & Dependencies ---
+
+# Command for Pinout.h
+add_custom_command(
+    OUTPUT  "${PINOUT_HEADER}"
+    COMMAND make -C "${CMAKE_CURRENT_SOURCE_DIR}/Pinout" all
+    DEPENDS "${PINOUT_DEF}" "${PINOUT_CNF}"
+    COMMENT "Generating Pinout.h from Pinout.cnf..."
+    VERBATIM
+)
+
+# Command for Comm.h and Comm.c 
+add_custom_command(
+    OUTPUT  "${COMM_HEADER}" "${COMM_SOURCE}"
+    COMMAND make -C "${CMAKE_CURRENT_SOURCE_DIR}/Comm" all
+    DEPENDS "${COMM_DEF_H}" "${COMM_DEF_C}" "${COMM_CNF}"
+    COMMENT "Generating Comm files from Comm.cnf..."
+    VERBATIM
+)
+
+# Create a target for the generation process
+add_custom_target(generate_config_files 
+    DEPENDS "${PINOUT_HEADER}" "${COMM_HEADER}" "${COMM_SOURCE}"
+)
+
+# Force the component to wait for code generation before compiling 
+add_dependencies(${COMPONENT_LIB} generate_config_files)
+
+# Mark the .c file as GENERATED so CMake ignores missing files during config
+set_source_files_properties("${COMM_SOURCE}" PROPERTIES GENERATED TRUE)
+
+
 
 ##DEPRECATED## # --- Path Definitions ---
 ##DEPRECATED## 
@@ -82,4 +138,3 @@ idf_component_register(
 ##DEPRECATED## 
 ##DEPRECATED## # Mark the .c file as GENERATED so CMake doesn't complain if it is missing at startup
 ##DEPRECATED## set_source_files_properties("${COMM_SOURCE}" PROPERTIES GENERATED TRUE)
-
