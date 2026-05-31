@@ -24,17 +24,21 @@ ReturnCode_t AppInit() {
 
 	for (int32_t i = 0; i < (sizeof(ServiceList) / sizeof(ServiceList[0])); i++) {
 		AppService_t *srv = &ServiceList[i];
-		SysLog("[AppInit] Start service %s", srv->Name);
+		#if (ZECU_DISABLE_ALL_SERVICES == 0)
+			SysLog("AppInit(...): Start service %s", srv->Name);
 
-		if (IsNull(srv->Service)) {
-			SysErr("AppInit(...): Service %s has NULL function pointer!", srv->Name);
-			continue;
-		}
-		else if (srv->StackSize < MIN_STACK_SIZE) {
-			SysErr("AppInit(...): Service %s stack size (%d) is too small!", srv->Name, srv->StackSize);
-			continue;
-		}
-		xTaskCreate(srv->Service, srv->Name, srv->StackSize, srv->Param, srv->Priority, &srv->Handle);
+			if (IsNull(srv->Service)) {
+				SysErr("AppInit(...): Service %s has NULL function pointer!", srv->Name);
+				continue;
+			}
+			else if (srv->StackSize < MIN_STACK_SIZE) {
+				SysErr("AppInit(...): Service %s stack size (%d) is too small!", srv->Name, srv->StackSize);
+				continue;
+			}
+			xTaskCreate(srv->Service, srv->Name, srv->StackSize, srv->Param, srv->Priority, &srv->Handle);
+		#else
+			SysLog("AppInit(...): Service \"%s\" is disabled due to `ZECU_DISABLE_ALL_SERVICES!=0` macro. Clear it to re-enable!", srv->Name);
+		#endif /*iodefine"?*/
 	}
 
 	SysExit("AppInit");

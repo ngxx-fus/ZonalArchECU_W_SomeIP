@@ -18,7 +18,7 @@ extern "C" {
 #include "esp_system.h"         /// ESP32 system APIs
 
 /// This help the lib more readable!
-#include "../AppConfig/SystemLog.h"
+#include "../AppConfig/All.h"
 
 /// Auto-Config
 #if (1 == 1)

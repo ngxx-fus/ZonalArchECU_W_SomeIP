@@ -13,16 +13,30 @@ PORT_PATTERN := PORT
 
 all: $(TARGET_H) $(TARGET_C)
 
-# Generate Comm.h (Strings and Externs)
+# Generate Comm.h (Strings, Macros and Externs)
 $(TARGET_H): $(DEF_H) $(CONFIG_FILE)
 	@echo "Generating $(TARGET_H)..."
 	@awk -v port_pat="$(PORT_PATTERN)" -v addr_pat="$(ADDR_PATTERN)" -F'=' 'NF==2 { \
-		defines = defines sprintf("#define %s_STR \"%s\"\n", $$1, $$2); \
+		name = $$1; val = $$2; \
+		defines = defines sprintf("#define %s_STR \"%s\"\n", name, val); \
 		_c = "Check if key matches PORT pattern to steer data type assignment"; \
-		is_port = ($$1 ~ port_pat); \
-		type = is_port ? "Word_t" : "Byte_t"; \
+		is_port = (name ~ port_pat); \
+		if (is_port) { \
+			defines = defines sprintf("#define %s_VAL %s\n", name, val); \
+			defines = defines sprintf("#define %s_HEX 0x%04X\n", name, val); \
+		} else { \
+			_c = "Parse MAC or IP formats for HEX macro generation"; \
+			if (val ~ /:/) { \
+				mac = val; gsub(":", "", mac); \
+				defines = defines sprintf("#define %s_HEX 0x%s\n", name, toupper(mac)); \
+			} else if (val ~ /\./) { \
+				split(val, ip, "."); \
+				defines = defines sprintf("#define %s_HEX 0x%02X%02X%02X%02X\n", name, ip[4], ip[3], ip[2], ip[1]); \
+			} \
+		} \
+		type = is_port ? "const Word_t" : "const Byte_t"; \
 		arr = is_port ? "" : "[]"; \
-		externs = externs sprintf("extern %s %s%s;\n", type, $$1, arr); \
+		externs = externs sprintf("extern %s %s%s;\n", type, name, arr); \
 	} END { print defines externs }' $(CONFIG_FILE) > .tmp_h
 	@awk ' \
 		/GENERATED SECTION \| BEGIN/ { \
@@ -46,7 +60,7 @@ $(TARGET_C): $(DEF_C) $(CONFIG_FILE)
 		name=$$1; val=$$2; \
 		_c = "Check if name matches PORT pattern to steer array type"; \
 		is_port = (name ~ port_pat); \
-		type = is_port ? "Word_t" : "Byte_t"; \
+		type = is_port ? "const Word_t" : "const Byte_t"; \
 		if (is_port) { \
 			printf "%s %s = %s;\n", type, name, val; \
 		} else { \

@@ -5,6 +5,9 @@
 
 /* NETWORK DEFINITION ***********************************************************************************************************/
 
+#ifndef __SYSTEM_DEF_TYPE_UNSIGNED_INT__
+#define __SYSTEM_DEF_TYPE_UNSIGNED_INT__
+
 /// @brief 8-bit unsigned integer type
 typedef uint8_t     Byte_t;
 
@@ -20,8 +23,10 @@ typedef uint64_t    Qword_t;
 /// @brief Ethernet size type (16-bit unsigned int32_t, but valid range from 1500 to 0xFFFF)
 typedef Word_t      EthSize_t;
 
-// /// @brief Generic pointer
-// typedef void*       GenericPtr_t;
+#endif /*__SYSTEM_DEF_TYPE_UNSIGNED_INT__*/
+
+#ifndef __SYSTEM_DEF_TYPE_GENERIC_POINTER__
+#define __SYSTEM_DEF_TYPE_GENERIC_POINTER__
 
 /// @brief Generic pointer (consist of all casting type)
 typedef union GenericPtr_t {
@@ -44,6 +49,11 @@ typedef union GenericPtr_t {
 } GenericPtr_t;
 
 #define GenericNullPtr  ((GenericPtr_t)(NULL))
+
+#endif /*__SYSTEM_DEF_TYPE_GENERIC_POINTER__*/
+
+#ifndef __SYSTEM_DEF_TYPE_NETWORK__
+#define __SYSTEM_DEF_TYPE_NETWORK__
 
 /// @brief Ethernet MAC Address structure using 48-bit (6 bytes)
 typedef union EthMACAddr_t {
@@ -91,6 +101,9 @@ typedef union IPv4Packet_t {
     ];                          ///< Access entire EthPacket_t as byte array
 } IPv4Packet_t;
 
+#endif /*__SYSTEM_DEF_TYPE_NETWORK__*/
+
+
 /* GENERIC PAYLOAD UTILS *********************************************************************************************************/
 
 /// @brief Initialize a new generic payload by allocating memory based on existing Size
@@ -120,7 +133,7 @@ ReturnCode_t ConvertByteArr2IPvToAddress(uint8_t IPv4Addr[], char IPv4Str[]);
 /// @brief Convert a 4-byte array to a 32-bit unsigned integer
 /// @param IPv4Addr Input array of 4 bytes
 /// @return uint32_t The packed 32-bit IP address in Network Byte Order
-uint32_t ConvertIPv4ByteArr2Uint32(uint8_t IPv4Addr[]);
+uint32_t ConvertIPv4ByteArr2Uint32(const uint8_t IPv4Addr[]);
 
 /// @brief Convert an IPv4 string to a 4-byte array
 /// @param IPv4Str Input dotted-decimal string

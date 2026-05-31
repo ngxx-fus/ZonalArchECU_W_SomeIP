@@ -9,6 +9,31 @@
     #define SYNC_FR_LEN     512U
 #endif
 
+/*
+ * @brief Union representing Electronic Control Unit (ECU) network information.
+ * Facilitates easy switching between structured field access and raw byte transmission.
+ */
+typedef union {
+    /*
+     * @brief Packed structure containing specific ECU configuration parameters.
+     * Memory alignment is disabled to ensure exact byte mapping for network protocols.
+     */
+    struct __attribute__((packed)) Fields_t {
+        char     ECUName[32];         /*< Null-terminated string identifying the ECU. */
+        uint64_t EthMACAddress : 48;  /*< 48-bit Hardware Ethernet MAC Address. */
+        uint16_t IPv4DefPort;         /*< 16-bit Default Communication Port. */
+        uint32_t IPv4Address;         /*< 32-bit Network IPv4 Address. */
+    } Fields;
+    
+    uint8_t RawByte[sizeof(struct Fields_t)]; /*< Raw byte array for direct serialization. */
+} ECUInfo_t;
+
+/*
+ * @brief Global constant instance of the ECU network configuration.
+ * Defined in an external source file, providing read-only access to device identity.
+ */
+extern const ECUInfo_t ECUInfo;
+
 /**
  * @brief Sensor distance data packed into 32-bit structure.
  * Total: 32 bits (4 bytes).
@@ -42,8 +67,9 @@ typedef union {
  * This structure aggregates distance and motor data.
  */
 typedef struct __attribute__((packed)) {
-    SensorDistance_t Distance;
-    ActualMotor_t    Motor;
+    ECUInfo_t           ECUInfo;
+    SensorDistance_t    Distance;
+    ActualMotor_t       Motor;
 } SF_ECUState_t;
 
 /**

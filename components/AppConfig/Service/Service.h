@@ -1,0 +1,6 @@
+#ifndef __APP_CONFIG_SERVICE_H__
+#define __APP_CONFIG_SERVICE_H__
+
+#define ZECU_DISABLE_ALL_SERVICES 0
+
+#endif /*__APP_CONFIG_SERVICE_H__*/

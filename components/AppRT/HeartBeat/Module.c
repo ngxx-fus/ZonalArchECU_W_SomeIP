@@ -3,19 +3,19 @@
 #include "../__CommonHeaders.h"
 #include "../../AppComm/SharedAPIs.h"
 
-/**
+/*
  * @brief Mock function to retrieve H-Bridge motor speed.
  * @note Replace this with the actual function from the HBridge module.
- * * @return uint16_t The current motor speed in RPM.
+ * @return uint16_t The current motor speed in RPM.
  */
 __attribute__((weak)) uint16_t HBridge_GetSpeed(void) { 
     /* Return mock data to avoid compilation errors */
     return 3000;      
 }
 
-/**
+/*
  * @brief High-level control task to collect and transmit ECU state periodically.
- * * @param arg Pointer to task arguments (unused).
+ * @param arg Pointer to task arguments (unused).
  */
 void HeartBeatRuntime(void* arg) {
     SysEntry("HeartBeatRuntime");
@@ -23,6 +23,8 @@ void HeartBeatRuntime(void* arg) {
 
     SF_ECUState_t ecuState;
     memset(&ecuState, 0, sizeof(SF_ECUState_t));
+    memcpy(&ecuState.ECUInfo, &ECUInfo, sizeof(ECUInfo));
+
     static uint8_t sync_num = 0;
 
     /* Infinite loop to periodically process and dispatch heartbeat frames */
@@ -43,10 +45,14 @@ void HeartBeatRuntime(void* arg) {
             SysErr("HeartBeatRuntime: EMERGENCY! Sensor 0 distance (%u cm) is below threshold (%u cm).", dist0_cm, SF_ETT_Distance[0]);
             EmergencyStop();
         }
+        
+        /* Check if sensor 1 is below threshold */
         if (dist1_cm < SF_ETT_Distance[1]) {
             SysErr("HeartBeatRuntime: EMERGENCY! Sensor 1 distance (%u cm) is below threshold (%u cm).", dist1_cm, SF_ETT_Distance[1]);
             EmergencyStop();
         }
+        
+        /* Check if sensor 2 is below threshold */
         if (dist2_cm < SF_ETT_Distance[2]) {
             SysErr("HeartBeatRuntime: EMERGENCY! Sensor 2 distance (%u cm) is below threshold (%u cm).", dist2_cm, SF_ETT_Distance[2]);
             EmergencyStop();
@@ -69,7 +75,7 @@ void HeartBeatRuntime(void* arg) {
         /* 3. Dispatch the packed UDP payload via the W5500 network layer */
         ReturnCode_t ret = Eth_SendUDPPacket(CCU_IP_ADDR, CCU_UDP_PORT, (uint8_t*)&ecuState, sizeof(SF_ECUState_t));
         
-        /* Steering logic to evaluate the transmission status and log the outcome */
+        /* Evaluate the transmission status and log the outcome */
         if (ret == STAT_OKE) {
             SysLog("HeartBeatRuntime: Sent ECU State -> D0: %u, D1: %u, D2: %u, M0: %u, M1: %u, SyncNum: %u", 
                    ecuState.Distance.Fields.D0,
@@ -82,12 +88,12 @@ void HeartBeatRuntime(void* arg) {
             SysErr("HeartBeatRuntime: Failed to send ECU State! Error: %d", ret);
         }
 
-        /* 4. Suspend task execution for the defined 300ms cycle duration */
+        /* 4. Suspend task execution for the defined cycle duration */
         vTaskDelay(pdMS_TO_TICKS(HEART_TASK_CYCLE_MS));
     }
 
     SysExit("HeartBeatRuntime");
     
-    /* Control flow termination: Delete task to clean up resources if loop exits */
+    /* Delete task to clean up resources if loop exits */
     vTaskDelete(NULL);
 }
