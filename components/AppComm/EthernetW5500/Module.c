@@ -24,7 +24,7 @@ static EthRxCallback_t Eth_RxCallback = NULL;
  * @param SrcMAC Pointer to the 6-byte source MAC address (can be NULL)
  * @param DstMAC Pointer to the 6-byte destination MAC address (can be NULL)
  */
-static void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, GenericPtr_t DstMAC) {
+void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, GenericPtr_t DstMAC) {
     SysLog("W5500_LogFrame");
 
     Byte_t* pData = Data.UInt8;
@@ -91,7 +91,7 @@ static void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMA
  * @brief Log network information extracted from the received packet
  * @param pkt Pointer to the packet slot in RxPool
  */
-static void W5500_LogUDPInfo(PacketSlot_t* pkt) {
+void W5500_LogUDPInfo(PacketSlot_t* pkt) {
     /* Validate packet pointer */
     if (pkt == NULL) {
         /* Abort if packet is null */
@@ -594,7 +594,6 @@ __attribute__((weak)) void Eth_WeakRxCallback(PacketSlot_t* pkt) {
     
     W5500_LogUDPInfo(pkt);
     W5500_LogFrame((GenericPtr_t)pkt->Data, pkt->Size, GenericNullPtr, GenericNullPtr);
-    
     TxPacket_Push(pkt->Size, (GenericPtr_t)pkt->Data, pkt->SrcIP.Byte, pkt->SrcPort.Word, pkt->SrcMAC.Byte);
     
     /* Verify communication task readiness before notification */

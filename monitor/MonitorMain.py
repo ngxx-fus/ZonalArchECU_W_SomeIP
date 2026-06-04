@@ -10,6 +10,8 @@ from PySide6.QtCore import Qt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
+from MonitorConfig import *
+
 # /* Import external components */
 from monitor_ui import Ui_MainWindow
 from CoreNetwork import ZoneECU, CCUCommandBuilder
@@ -24,6 +26,7 @@ class MyMonitorApp(QMainWindow):
     #  */
     def __init__(self):
         super().__init__()
+        SysLog("Initializing MyMonitorApp constructor.")
         
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
@@ -56,11 +59,13 @@ class MyMonitorApp(QMainWindow):
         self.udp_thread.start()
 
         self.app_log("System Ready. Waiting for ECU Heartbeats...")
+        SysInfo("System Ready. Waiting for ECU Heartbeats...")
 
     # /*
     #  * @brief Upgrades the static QLabel into a dynamic QTextEdit for logging.
     #  */
     def setup_logging_console(self):
+        SysLog("Upgrading static QLabel to dynamic QTextEdit for logging.")
         geom = self.ui.label.geometry()
         parent = self.ui.label.parentWidget()
         
@@ -78,6 +83,7 @@ class MyMonitorApp(QMainWindow):
     #  * @brief Binds all UI events to their respective callback functions.
     #  */
     def connect_signals(self):
+        SysLog("Binding UI events to callback functions.")
         self.ui.Control_StartStop.clicked.connect(self.on_start_stop_clicked)
         self.ui.Control_MoveForward.clicked.connect(self.on_forward_clicked)
         self.ui.Control_MoveBackward.clicked.connect(self.on_backward_clicked)
@@ -109,9 +115,12 @@ class MyMonitorApp(QMainWindow):
     #  * @param data The raw byte array to transmit.
     #  */
     def UDPSendBack(self, target_ecu, data):
+        SysLog("Preparing to transmit UDP data to %s.", target_ecu.name if target_ecu else "Unknown")
+        
         # /* Guard clause to ensure valid destination */
         if target_ecu is None or not target_ecu.ip:
             self.app_log("TX ERROR: Target ECU is undefined or missing IP.")
+            SysErr("TX ERROR: Target ECU is undefined or missing IP.")
             return
             
         try:
@@ -120,8 +129,10 @@ class MyMonitorApp(QMainWindow):
             # sock.sendto(data, (target_ecu.ip, target_ecu.port))
             # sock.close()
             self.app_log(f"TX -> {target_ecu.name} [{target_ecu.ip}:{target_ecu.port}] | Size: {len(data)} bytes")
+            SysInfo("TX -> %s [%s:%d] | Size: %d bytes", target_ecu.name, target_ecu.ip, target_ecu.port, len(data))
         except Exception as e:
             self.app_log(f"TX ERROR: Failed to transmit to {target_ecu.name}. Reason: {e}")
+            SysErr("TX ERROR: Failed to transmit to %s. Reason: %s", target_ecu.name, str(e))
             
         # /* Return from execution */
         return
@@ -130,6 +141,7 @@ class MyMonitorApp(QMainWindow):
     #  * @brief Initializes the embedded Matplotlib charting environment.
     #  */
     def setup_graph(self):
+        SysLog("Initializing embedded Matplotlib charting environment.")
         self.fig = Figure(figsize=(5, 4), dpi=100)
         self.fig.tight_layout()
         
@@ -159,6 +171,7 @@ class MyMonitorApp(QMainWindow):
     #  * @param ecu_name The string identifier of the ECU.
     #  */
     def register_new_ecu(self, ecu_name):
+        SysInfo("Registering newly discovered ECU: %s", ecu_name)
         stats = {
             "received": 0, "last_seq": -1, "last_time": 0.0,
             "dist_sync_history": [], "motor_sync_history": [],
@@ -192,6 +205,8 @@ class MyMonitorApp(QMainWindow):
         self.global_packet_count += 1
         ecu_name = payload["name"]
         
+        SysLog("Processing incoming packet from ECU: %s", ecu_name)
+        
         # /* Evaluate ECU origin to classify as Front or Back */
         ecu_type = None
         if "Front" in ecu_name:
@@ -207,13 +222,16 @@ class MyMonitorApp(QMainWindow):
             if existing_ecu is None:
                 self.zone_ecus[ecu_type] = ZoneECU(ecu_name, payload["ip"], payload["port"], payload["mac"])
                 self.app_log(f"REGISTERED: {ecu_type} Zone -> {ecu_name} [{payload['ip']}:{payload['port']} | MAC: {payload['mac']}]")
+                SysInfo("REGISTERED: %s Zone -> %s [%s:%d | MAC: %s]", ecu_type, ecu_name, payload["ip"], payload["port"], payload["mac"])
             # /* Branch if conflicting ECU is detected in the same slot */
             elif existing_ecu.name != ecu_name or existing_ecu.ip != payload["ip"]:
                 self.app_log(f"ERROR: Conflict in {ecu_type} Zone! Existing: {existing_ecu.name}, Incoming: {ecu_name}")
+                SysErr("Conflict in %s Zone! Existing: %s, Incoming: %s", ecu_type, existing_ecu.name, ecu_name)
                 # /* Return from execution to discard conflicting packet */
                 return
         else:
             self.app_log(f"ERROR: Unknown ECU classification for {ecu_name}")
+            SysErr("Unknown ECU classification for %s", ecu_name)
             # /* Return from execution */
             return
         
@@ -253,6 +271,7 @@ class MyMonitorApp(QMainWindow):
     #  * @brief Updates numeric labels and sliders based on telemetry.
     #  */
     def update_gui_elements(self, ecu_name, d0, d1, d2, m0, m1):
+        SysLog("Updating GUI elements for ECU: %s", ecu_name)
         f_d0 = f"{d0/100:.2f}m"
         f_d1 = f"{d1/100:.2f}m"
         f_d2 = f"{d2/100:.2f}m"
@@ -293,6 +312,7 @@ class MyMonitorApp(QMainWindow):
     #  * @brief Redraws the Matplotlib canvas.
     #  */
     def refresh_graph(self, max_points):
+        SysLog("Refreshing Matplotlib graph canvas. Max points: %d", max_points)
         global_max_x, global_min_x = 0, 0
         global_max_dist, global_max_motor = 0, 0
         
@@ -349,6 +369,7 @@ class MyMonitorApp(QMainWindow):
         state_str = "START" if self.sys_engine_started else "STOP"
         
         self.app_log(f"ACTION: System {state_str} command initiated.")
+        SysInfo("ACTION: System %s command initiated.", state_str)
         payload = CCUCommandBuilder.build_sys_ctrl(self.sys_engine_started)
         
         # /* Loop through registered ECUs to broadcast the system state */
@@ -366,6 +387,7 @@ class MyMonitorApp(QMainWindow):
     #  */
     def on_forward_clicked(self):
         self.app_log("ACTION: Move Forward command initiated.")
+        SysInfo("ACTION: Move Forward command initiated.")
         payload = CCUCommandBuilder.build_eng_ctrl(100, 100)
         
         # /* Loop through registered ECUs to broadcast the forward state */
@@ -383,6 +405,7 @@ class MyMonitorApp(QMainWindow):
     #  */
     def on_backward_clicked(self):
         self.app_log("ACTION: Move Backward command initiated.")
+        SysInfo("ACTION: Move Backward command initiated.")
         payload = CCUCommandBuilder.build_eng_ctrl(-100, -100)
         
         # /* Loop through registered ECUs to broadcast the backward state */
@@ -399,6 +422,7 @@ class MyMonitorApp(QMainWindow):
     #  * @param zone String representing "Front" or "Back".
     #  */
     def _transmit_motor_update(self, zone):
+        SysLog("Transmitting motor update for zone: %s", zone)
         ecu = self.zone_ecus.get(zone)
         
         # /* Branch if ECU is currently registered and actively connected */
@@ -417,6 +441,7 @@ class MyMonitorApp(QMainWindow):
     #  */
     def on_slider_front_left_changed(self, value):
         self.app_log(f"CONTROL: Front Left Motor adjusted to {value}%")
+        SysInfo("CONTROL: Front Left Motor adjusted to %d%%", value)
         self.motor_states["Front"]["L"] = value
         self._transmit_motor_update("Front")
         
@@ -429,6 +454,7 @@ class MyMonitorApp(QMainWindow):
     #  */
     def on_slider_front_right_changed(self, value):
         self.app_log(f"CONTROL: Front Right Motor adjusted to {value}%")
+        SysInfo("CONTROL: Front Right Motor adjusted to %d%%", value)
         self.motor_states["Front"]["R"] = value
         self._transmit_motor_update("Front")
         
@@ -441,6 +467,7 @@ class MyMonitorApp(QMainWindow):
     #  */
     def on_slider_back_left_changed(self, value):
         self.app_log(f"CONTROL: Back Left Motor adjusted to {value}%")
+        SysInfo("CONTROL: Back Left Motor adjusted to %d%%", value)
         self.motor_states["Back"]["L"] = value
         self._transmit_motor_update("Back")
         
@@ -453,6 +480,7 @@ class MyMonitorApp(QMainWindow):
     #  */
     def on_slider_back_right_changed(self, value):
         self.app_log(f"CONTROL: Back Right Motor adjusted to {value}%")
+        SysInfo("CONTROL: Back Right Motor adjusted to %d%%", value)
         self.motor_states["Back"]["R"] = value
         self._transmit_motor_update("Back")
         
@@ -464,6 +492,7 @@ class MyMonitorApp(QMainWindow):
     #  */
     def closeEvent(self, event):
         self.app_log("Shutting down core networking services...")
+        SysInfo("Shutting down core networking services...")
         self.udp_thread.stop()
         self.udp_thread.wait() 
         event.accept()
@@ -486,6 +515,8 @@ class MyMonitorApp(QMainWindow):
         win_w = self.width()
         win_h = self.height()
         
+        SysLog("Window resized: %d x %d", win_w, win_h)
+        
         new_graph_width = max(200, win_w - 670 - 20)
         new_graph_height = max(200, win_h - 40 - 40)
         self.ui.Graph.setGeometry(670, 40, new_graph_width, new_graph_height)
@@ -497,6 +528,7 @@ class MyMonitorApp(QMainWindow):
 # /* EXECUTION ENTRY POINT                                                     */
 # /* ========================================================================= */
 if __name__ == "__main__":
+    SysInfo("Application execution started.")
     app = QApplication(sys.argv)
     window = MyMonitorApp()
     window.show()

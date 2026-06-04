@@ -34,6 +34,10 @@ typedef void (*EthRxCallback_t)(PacketSlot_t* pkt);
 ReturnCode_t Eth_SetRxCallback(EthRxCallback_t cb);
 void Eth_WeakRxCallback(PacketSlot_t* pkt);
 
+/* Logging utilities */
+void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, GenericPtr_t DstMAC);
+void W5500_LogUDPInfo(PacketSlot_t* pkt);
+
 ReturnCode_t Eth_SendUDPPacket(uint32_t IPv4Address, uint16_t IPv4Port, uint8_t* UDP_Payload, uint16_t PayloadSize);
 
 /*Runtime service*/

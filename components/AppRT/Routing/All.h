@@ -4,6 +4,7 @@
 #include "SyncFrame.h"
 #include "RoutingMatrix.h"
 #include "E2EComputeHelper.h"
+#include "TempControlFrame.h"
 
 
 #endif /*__PACKET_PARSER_ALL_H__*/

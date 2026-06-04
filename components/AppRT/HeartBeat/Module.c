@@ -14,12 +14,50 @@ __attribute__((weak)) uint16_t HBridge_GetSpeed(void) {
 }
 
 /*
+ * @brief Application-level Ethernet Rx Callback.
+ * @param pkt Pointer to the received packet slot.
+ */
+void App_EthernetRxCallback(PacketSlot_t* pkt) {
+    /* 1. Ignore if packet pointer is invalid */
+    if (pkt == NULL) {
+        return;
+    }
+    
+    /* 2. Log Network Info using public W5500 module APIs */
+    SysLog("App_EthernetRxCallback(...): Received packet");
+    W5500_LogUDPInfo(pkt);
+
+    /* 3. Log raw frame data (Hex and ASCII dump) */
+    W5500_LogFrame((GenericPtr_t)pkt->Data, pkt->Size, GenericNullPtr, GenericNullPtr);
+
+    /* 4. Parse the received packet to extract CCU telemetry commands */
+    ParseCCUPacket((const uint8_t*)pkt->Data, pkt->Size);
+    
+    /* 5. Optional: Echo the packet back (remove if not needed) */
+    TxPacket_Push(pkt->Size, (GenericPtr_t)pkt->Data, pkt->SrcIP.Byte, pkt->SrcPort.Word, pkt->SrcMAC.Byte);
+    
+    /* Notify communication task to send out the Echo packet */
+    if (W5500_TaskComm_TaskHandler != NULL) {
+        xTaskNotifyGive(W5500_TaskComm_TaskHandler);
+    }
+}
+
+void Eth_CallBackSetUp(){
+    /* Register the application-level Rx callback to the Ethernet module */
+    Eth_SetRxCallback(App_EthernetRxCallback);
+    SysLog("Eth_CallBackSetUp(...): Application Ethernet Rx Callback registered successfully.");
+}
+
+/*
  * @brief High-level control task to collect and transmit ECU state periodically.
  * @param arg Pointer to task arguments (unused).
  */
 void HeartBeatRuntime(void* arg) {
     SysEntry("HeartBeatRuntime");
     SysLog("HeartBeatRuntime(...): Started! Target CCU: 10.0.0.100:%d", CCU_UDP_PORT);
+
+    /* Register the Ethernet data reception callback before entering the loop */
+    Eth_CallBackSetUp();
 
     SF_ECUState_t ecuState;
     memset(&ecuState, 0, sizeof(SF_ECUState_t));
