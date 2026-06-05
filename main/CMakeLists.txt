@@ -4,19 +4,10 @@ idf_component_register(
     INCLUDE_DIRS 
         "."
     REQUIRES 
-        esp_driver_gpio 
-        esp_driver_spi 
-        esp_timer 
-        AppConfig 
-        AppESPWrap 
-        AppUtils
-        AppComm
+        AppRT
 )
 
 target_include_directories(${COMPONENT_TARGET}
     PUBLIC
-    ../AppConfig
-    ../AppESPWrap
-    ../AppUtils
-    ../AppComm
+    ../AppRT
 )

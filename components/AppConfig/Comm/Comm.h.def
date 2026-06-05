@@ -1,0 +1,30 @@
+#ifndef __DEVICE_COMM_H__
+#define __DEVICE_COMM_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include <stdint.h>
+#include <stdlib.h>
+
+/// @brief 8-bit unsigned integer type
+typedef uint8_t Byte_t;
+
+/// @brief 16-bit unsigned integer type
+typedef uint16_t Word_t;
+
+/// @brief 32-bit unsigned integer type
+typedef uint32_t Dword_t;
+
+/// @brief 64-bit unsigned integer type
+typedef uint64_t Qword_t;
+
+/// GENERATED SECTION | BEGIN /////////////////////////////////////////////////
+/// GENERATED SECTION | END   /////////////////////////////////////////////////
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /// __DEVICE_PINOUT_H__
