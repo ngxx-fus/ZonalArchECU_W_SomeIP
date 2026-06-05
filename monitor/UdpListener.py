@@ -46,7 +46,7 @@ class UdpListenerThread(QThread):
                 # data, addr = sock.recvfrom(2048)
                 current_time = time.perf_counter()
                 
-                if len(data) < EXPECTED_PACKET_SIZE:
+                if len(data) != EXPECTED_PACKET_SIZE:
                     continue
                     
                 header_bytes = data[:ECU_HEADER_SIZE]
@@ -66,8 +66,8 @@ class UdpListenerThread(QThread):
                 d2 = (dist_raw >> 20) & 0x3FF
                 dist_sync = (dist_raw >> 30) & 0x03
                 
-                m0 = motor_raw & 0x3FF
-                m1 = (motor_raw >> 10) & 0x3FF
+                m0 = (motor_raw & 0x3FF) - 100
+                m1 = ((motor_raw >> 10) & 0x3FF) - 100
                 motor_sync = (motor_raw >> 20) & 0x03
                 
                 payload = {

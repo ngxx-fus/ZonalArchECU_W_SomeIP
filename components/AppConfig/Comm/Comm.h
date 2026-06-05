@@ -20,17 +20,17 @@ typedef uint32_t Dword_t;
 /// @brief 64-bit unsigned integer type
 typedef uint64_t Qword_t;
 
-#define ECUNAME_STR "FrontZECU"
+#define ECUNAME_STR "BackZECU"
 
 /// GENERATED SECTION | BEGIN /////////////////////////////////////////////////
 #define GW_IP_ADDR_STR "10.0.0.1"
 #define GW_IP_ADDR_HEX 0x0100000A
-#define SRC_MAC_ADDR_STR "47:32:01:DC:08:00"
-#define SRC_MAC_ADDR_HEX 0x473201DC0800
+#define SRC_MAC_ADDR_STR "58:32:01:DC:08:00"
+#define SRC_MAC_ADDR_HEX 0x583201DC0800
 #define SUBNET_MASK_STR "255.255.255.0"
 #define SUBNET_MASK_HEX 0x00FFFFFF
-#define SRC_IP_ADDR_STR "10.0.0.47"
-#define SRC_IP_ADDR_HEX 0x2F00000A
+#define SRC_IP_ADDR_STR "10.0.0.58"
+#define SRC_IP_ADDR_HEX 0x3A00000A
 #define SOMEIP_PORT_STR "51786"
 #define SOMEIP_PORT_VAL 51786
 #define SOMEIP_PORT_HEX 0xCA4A

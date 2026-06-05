@@ -4,16 +4,6 @@
 #include "../../AppComm/SharedAPIs.h"
 
 /*
- * @brief Mock function to retrieve H-Bridge motor speed.
- * @note Replace this with the actual function from the HBridge module.
- * @return uint16_t The current motor speed in RPM.
- */
-__attribute__((weak)) uint16_t HBridge_GetSpeed(void) { 
-    /* Return mock data to avoid compilation errors */
-    return 3000;      
-}
-
-/*
  * @brief Application-level Ethernet Rx Callback.
  * @param pkt Pointer to the received packet slot.
  */
@@ -48,6 +38,8 @@ void Eth_CallBackSetUp(){
     SysLog("Eth_CallBackSetUp(...): Application Ethernet Rx Callback registered successfully.");
 }
 
+extern int32_t ConvertRawToPercent(int32_t rawValue);
+
 /*
  * @brief High-level control task to collect and transmit ECU state periodically.
  * @param arg Pointer to task arguments (unused).
@@ -55,6 +47,9 @@ void Eth_CallBackSetUp(){
 void HeartBeatRuntime(void* arg) {
     SysEntry("HeartBeatRuntime");
     SysLog("HeartBeatRuntime(...): Started! Target CCU: 10.0.0.100:%d", CCU_UDP_PORT);
+
+    MotorSetSpeed0(0);
+    MotorSetSpeed1(0);
 
     /* Register the Ethernet data reception callback before entering the loop */
     Eth_CallBackSetUp();
@@ -67,34 +62,41 @@ void HeartBeatRuntime(void* arg) {
 
     /* Infinite loop to periodically process and dispatch heartbeat frames */
     while (1) {
-        /* 1. Retrieve actual data from sensors and actuators */
-        uint16_t dist0_mm = HCSR04_GetLatestDistanceMm(0);
-        uint16_t dist1_mm = HCSR04_GetLatestDistanceMm(1);
-        uint16_t dist2_mm = HCSR04_GetLatestDistanceMm(2);
-        
-        /* Convert millimeters to centimeters and mask to fit into the 10-bit fields (Max: 1023) */
-        uint16_t dist0_cm = (dist0_mm != 0xFFFFU) ? (dist0_mm / 10U) : 0x3FF;
-        uint16_t dist1_cm = (dist1_mm != 0xFFFFU) ? (dist1_mm / 10U) : 0x3FF;
-        uint16_t dist2_cm = (dist2_mm != 0xFFFFU) ? (dist2_mm / 10U) : 0x3FF;
+        uint16_t 
+            dist0_mm = 0, dist1_mm = 0, dist2_mm = 0, 
+            dist0_cm = 0, dist1_cm = 0, dist2_cm = 0;
 
-        /* --- FAIL-SAFE CHECK --- */
-        /* Check if any sensor distance is below the emergency threshold */
-        if (dist0_cm < SF_ETT_Distance[0]) {
-            SysErr("HeartBeatRuntime: EMERGENCY! Sensor 0 distance (%u cm) is below threshold (%u cm).", dist0_cm, SF_ETT_Distance[0]);
-            EmergencyStop();
+        if(eSERVICE_DISABLED != ServiceList[eSERVICE_ULTRA_SONIC_RUNTIME].Status){
+            /* 1. Retrieve actual data from sensors and actuators */
+            dist0_mm = HCSR04_GetLatestDistanceMm(0);
+            dist1_mm = HCSR04_GetLatestDistanceMm(1);
+            dist2_mm = HCSR04_GetLatestDistanceMm(2);
+            
+            /* Convert millimeters to centimeters and mask to fit into the 10-bit fields (Max: 1023) */
+            dist0_cm = (dist0_mm != 0xFFFFU) ? (dist0_mm / 10U) : 0x3FF;
+            dist1_cm = (dist1_mm != 0xFFFFU) ? (dist1_mm / 10U) : 0x3FF;
+            dist2_cm = (dist2_mm != 0xFFFFU) ? (dist2_mm / 10U) : 0x3FF;
+
+            /* --- FAIL-SAFE CHECK --- */
+            /* Check if any sensor distance is below the emergency threshold */
+            if (dist0_cm < SF_ETT_Distance[0]) {
+                SysErr("HeartBeatRuntime: EMERGENCY! Sensor 0 distance (%u cm) is below threshold (%u cm).", dist0_cm, SF_ETT_Distance[0]);
+                EmergencyStop();
+            }
+            
+            /* Check if sensor 1 is below threshold */
+            if (dist1_cm < SF_ETT_Distance[1]) {
+                SysErr("HeartBeatRuntime: EMERGENCY! Sensor 1 distance (%u cm) is below threshold (%u cm).", dist1_cm, SF_ETT_Distance[1]);
+                EmergencyStop();
+            }
+            
+            /* Check if sensor 2 is below threshold */
+            if (dist2_cm < SF_ETT_Distance[2]) {
+                SysErr("HeartBeatRuntime: EMERGENCY! Sensor 2 distance (%u cm) is below threshold (%u cm).", dist2_cm, SF_ETT_Distance[2]);
+                EmergencyStop();
+            }
         }
-        
-        /* Check if sensor 1 is below threshold */
-        if (dist1_cm < SF_ETT_Distance[1]) {
-            SysErr("HeartBeatRuntime: EMERGENCY! Sensor 1 distance (%u cm) is below threshold (%u cm).", dist1_cm, SF_ETT_Distance[1]);
-            EmergencyStop();
-        }
-        
-        /* Check if sensor 2 is below threshold */
-        if (dist2_cm < SF_ETT_Distance[2]) {
-            SysErr("HeartBeatRuntime: EMERGENCY! Sensor 2 distance (%u cm) is below threshold (%u cm).", dist2_cm, SF_ETT_Distance[2]);
-            EmergencyStop();
-        }
+
 
         /* 2. Pack the retrieved information into the ECU state structure */
         ecuState.Distance.Fields.D0 = dist0_cm & 0x3FF;
@@ -109,15 +111,8 @@ void HeartBeatRuntime(void* arg) {
         // ecuState.Motor.Fields.Reserved = 0;
         
         /* Scale actual motor speeds from 0~1024 to -100~100 */
-        int32_t m0 = ((MotorGetSpeed0() * 200) / 1024);
-        int32_t m1 = ((MotorGetSpeed1() * 200) / 1024);
-
-        /* Clamp to valid range */
-        if (m0 > 100)  m0 = 100;
-        if (m0 < -100) m0 = -100;
-
-        if (m1 > 100)  m1 = 100;
-        if (m1 < -100) m1 = -100;
+        int32_t m0 = ConvertRawToPercent(MotorGetSpeed0());
+        int32_t m1 = ConvertRawToPercent(MotorGetSpeed1());
 
         ecuState.Motor.Fields.M0 = (m0 + 100) & 0xFF;
         ecuState.Motor.Fields.M1 = (m1 + 100) & 0xFF;

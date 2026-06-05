@@ -3,6 +3,7 @@
 
 import sys
 import socket
+import signal
 from datetime import datetime
 from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QTextEdit
 from PySide6.QtCore import Qt
@@ -144,10 +145,14 @@ class MyMonitorApp(QMainWindow):
         self.ui.Control_MoveForward.clicked.connect(self.on_forward_clicked)
         self.ui.Control_MoveBackward.clicked.connect(self.on_backward_clicked)
         
-        self.ui.Control_Front_Motor_Control_Slider_Left.valueChanged.connect(self.on_slider_front_left_changed)
-        self.ui.Control_Front_Motor_Control_Slider_Right.valueChanged.connect(self.on_slider_front_right_changed)
-        self.ui.Control_Back_Motor_Control_Slider_Left.valueChanged.connect(self.on_slider_back_left_changed)
-        self.ui.Control_Back_Motor_Control_Slider_Right.valueChanged.connect(self.on_slider_back_right_changed)
+        self.ui.Control_Front_Motor_Control_Slider_Left.sliderReleased.connect(
+            lambda: self.on_slider_front_left_changed(self.ui.Control_Front_Motor_Control_Slider_Left.value()))
+        self.ui.Control_Front_Motor_Control_Slider_Right.sliderReleased.connect(
+            lambda: self.on_slider_front_right_changed(self.ui.Control_Front_Motor_Control_Slider_Right.value()))
+        self.ui.Control_Back_Motor_Control_Slider_Left.sliderReleased.connect(
+            lambda: self.on_slider_back_left_changed(self.ui.Control_Back_Motor_Control_Slider_Left.value()))
+        self.ui.Control_Back_Motor_Control_Slider_Right.sliderReleased.connect(
+            lambda: self.on_slider_back_right_changed(self.ui.Control_Back_Motor_Control_Slider_Right.value()))
         
         self.ui.actionClose_app.triggered.connect(self.close)
         
@@ -237,6 +242,7 @@ class MyMonitorApp(QMainWindow):
         
         lines = {
             "dist_seq": self.ax1.plot([], [], marker='o', markersize=3, label=f'[{ecu_name}] Dist Sync')[0],
+            "motor_seq": self.ax1.plot([], [], marker='x', markersize=3, label=f'[{ecu_name}] Motor Sync')[0],
             "d0": self.ax2.plot([], [], marker='o', markersize=3, label=f'[{ecu_name}] D0')[0],
             "d1": self.ax2.plot([], [], marker='x', markersize=3, label=f'[{ecu_name}] D1')[0],
             "d2": self.ax2.plot([], [], marker='^', markersize=3, label=f'[{ecu_name}] D2')[0],
@@ -525,9 +531,10 @@ class MyMonitorApp(QMainWindow):
                 global_max_x = max(global_max_x, max(x_data))
                 global_min_x = max(0, global_max_x - max_points)
                 global_max_dist = max(global_max_dist, max(stats["d0_history"]), max(stats["d1_history"]), max(stats["d2_history"]))
-                global_max_motor = max(global_max_motor, max(stats["m0_history"]), max(stats["m1_history"]))
+                global_max_motor = max(global_max_motor, max(map(abs, stats["m0_history"])), max(map(abs, stats["m1_history"])))
 
             lines["dist_seq"].set_data(x_data, stats["dist_sync_history"])
+            lines["motor_seq"].set_data(x_data, stats["motor_sync_history"])
             lines["d0"].set_data(x_data, stats["d0_history"])
             lines["d1"].set_data(x_data, stats["d1_history"])
             lines["d2"].set_data(x_data, stats["d2_history"])
@@ -543,7 +550,9 @@ class MyMonitorApp(QMainWindow):
         # /* Check global configuration for dynamic vs static scaling */
         if SCALE_BASE_ON_LOCAL_MAX_VAL == 1:
             self.ax2.set_ylim(-10, (global_max_dist * 1.2) if global_max_dist > 0 else 1023)
-            self.ax3.set_ylim(-10, (global_max_motor * 1.2) if global_max_motor > 0 else 1023)
+            
+            max_m = max(10, global_max_motor)
+            self.ax3.set_ylim(-max_m * 1.2, max_m * 1.2)
         else:
             # /* Enforce limits from configuration file */
             max_dist_cm = max(MAX_DISTANCE_VAL) * 100 
@@ -613,9 +622,8 @@ class MyMonitorApp(QMainWindow):
         payload = CCUCommandBuilder.build_eng_ctrl(100, 100)
         
         # /* Loop through registered ECUs to broadcast the forward state */
-        for zone, ecu in self.zone_ecus.items():
-            # /* Branch if target ECU exists in the registry */
-            if ecu:
+        for zone, ecu_list in self.zone_ecus.items():
+            for ecu in ecu_list:
                 self.UDPSendBack(ecu, payload)
                 
         # /* Return from execution */
@@ -631,9 +639,8 @@ class MyMonitorApp(QMainWindow):
         payload = CCUCommandBuilder.build_eng_ctrl(-100, -100)
         
         # /* Loop through registered ECUs to broadcast the backward state */
-        for zone, ecu in self.zone_ecus.items():
-            # /* Branch if target ECU exists in the registry */
-            if ecu:
+        for zone, ecu_list in self.zone_ecus.items():
+            for ecu in ecu_list:
                 self.UDPSendBack(ecu, payload)
                 
         # /* Return from execution */
@@ -645,13 +652,13 @@ class MyMonitorApp(QMainWindow):
     #  */
     def _transmit_motor_update(self, zone):
         SysLog("Transmitting motor update for zone: %s", zone)
-        ecu = self.zone_ecus.get(zone)
+        ecu_list = self.zone_ecus.get(zone, [])
         
-        # /* Branch if ECU is currently registered and actively connected */
-        if ecu:
-            val_l = self.motor_states[zone]["L"]
-            val_r = self.motor_states[zone]["R"]
-            payload = CCUCommandBuilder.build_eng_ctrl(val_l, val_r)
+        val_l = self.motor_states[zone]["L"]
+        val_r = self.motor_states[zone]["R"]
+        payload = CCUCommandBuilder.build_eng_ctrl(val_l, val_r)
+        
+        for ecu in ecu_list:
             self.UDPSendBack(ecu, payload)
             
         # /* Return from execution */
@@ -722,6 +729,24 @@ class MyMonitorApp(QMainWindow):
         # /* Return from execution */
         return
 
+    # /*
+    #  * @brief Intercepts global key presses for application shortcuts.
+    #  * @param event The QKeyEvent triggered by the OS.
+    #  */
+    def keyPressEvent(self, event):
+        # /* Check if Control modifier is held down */
+        if event.modifiers() & Qt.ControlModifier:
+            # /* Trigger application exit on Ctrl+C or Ctrl+Z */
+            if event.key() == Qt.Key_C or event.key() == Qt.Key_Z:
+                self.app_log("Keyboard Interrupt: Exiting application...")
+                SysInfo("Keyboard Interrupt (Ctrl+C / Ctrl+Z) detected. Closing app.")
+                self.close()
+                return
+                
+        # /* Pass unhandled events to the parent class */
+        super().keyPressEvent(event)
+        return
+
     # /* ===================================================================== */
     # /* RESPONSIVE UI OVERRIDE                                                */
     # /* ===================================================================== */
@@ -743,6 +768,18 @@ class MyMonitorApp(QMainWindow):
         new_graph_height = max(200, win_h - 40 - 40)
         self.ui.Graph.setGeometry(670, 40, new_graph_width, new_graph_height)
         
+        # /* Scale the Visualization GroupBox height */
+        vis_geom = self.ui.Visualization.geometry()
+        new_vis_height = max(481, win_h - 73)
+        self.ui.Visualization.setGeometry(vis_geom.x(), vis_geom.y(), vis_geom.width(), new_vis_height)
+        
+        # /* Scale the Log Console height (ONLY HEIGHT as requested) */
+        if hasattr(self, 'log_console'):
+            log_geom = self.log_console.geometry()
+            # Keep bottom margin of 20px relative to the Visualization GroupBox
+            new_log_height = max(101, new_vis_height - log_geom.y() - 20)
+            self.log_console.setGeometry(log_geom.x(), log_geom.y(), log_geom.width(), new_log_height)
+        
         # /* Return from execution */
         return
 
@@ -751,6 +788,10 @@ class MyMonitorApp(QMainWindow):
 # /* ========================================================================= */
 if __name__ == "__main__":
     SysInfo("Application execution started.")
+    
+    # /* Allow terminal Ctrl+C to terminate the PySide6 application gracefully */
+    signal.signal(signal.SIGINT, signal.SIG_DFL)
+    
     app = QApplication(sys.argv)
     window = MyMonitorApp()
     window.show()

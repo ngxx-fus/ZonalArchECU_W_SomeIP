@@ -279,9 +279,9 @@ def process_ecu_timing(stats, dist_sync):
 #  * @param packet The raw bytes of the incoming packet
 #  */
 def parse_application_data(packet):
-    # /* Guard clause: verify packet meets the minimum size requirement */
-    if len(packet) < EXPECTED_PACKET_SIZE:
-        log(f"Dropped fragment: Size {len(packet)} < {EXPECTED_PACKET_SIZE}")
+    # /* Guard clause: verify packet meets the exact size requirement */
+    if len(packet) != EXPECTED_PACKET_SIZE:
+        log(f"Dropped fragment: Size {len(packet)} != {EXPECTED_PACKET_SIZE}")
         
         # /* Abort parsing due to invalid packet dimension */
         return
