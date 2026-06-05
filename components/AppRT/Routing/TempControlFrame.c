@@ -109,10 +109,11 @@ void ParseCCUPacket(const uint8_t *raw_data, size_t len) {
             /* Execute branch if alternate condition is met */
             else if (packet->info.sys_ctrl.fl_state == ARG_SYS_STOP) {
                 SysLog("ParseCCUPacket(...): System Stop Command Detected.\n");
-                MotorSetSpeed0(0);
-                MotorSetSpeed1(0);
-                HBridge_Apply(Motor);
             }
+
+            MotorSetSpeed0(0);
+            MotorSetSpeed1(0);
+            HBridge_Apply(Motor);
             /* Terminate switch case */
             break;
 

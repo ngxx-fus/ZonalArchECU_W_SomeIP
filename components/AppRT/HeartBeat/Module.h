@@ -5,7 +5,7 @@
 
 #ifndef HEART_TASK_CYCLE_MS
     /* Configure cycle time and routing table definitions */
-    #define HEART_TASK_CYCLE_MS 300
+    #define HEART_TASK_CYCLE_MS 150
 #endif /*HEART_TASK_CYCLE_MS*/
 /* Target CCU IP and Port configuration */
 #ifndef CCU_IPV4_ADDR_STR

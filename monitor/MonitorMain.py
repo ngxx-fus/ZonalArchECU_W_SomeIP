@@ -145,14 +145,10 @@ class MyMonitorApp(QMainWindow):
         self.ui.Control_MoveForward.clicked.connect(self.on_forward_clicked)
         self.ui.Control_MoveBackward.clicked.connect(self.on_backward_clicked)
         
-        self.ui.Control_Front_Motor_Control_Slider_Left.sliderReleased.connect(
-            lambda: self.on_slider_front_left_changed(self.ui.Control_Front_Motor_Control_Slider_Left.value()))
-        self.ui.Control_Front_Motor_Control_Slider_Right.sliderReleased.connect(
-            lambda: self.on_slider_front_right_changed(self.ui.Control_Front_Motor_Control_Slider_Right.value()))
-        self.ui.Control_Back_Motor_Control_Slider_Left.sliderReleased.connect(
-            lambda: self.on_slider_back_left_changed(self.ui.Control_Back_Motor_Control_Slider_Left.value()))
-        self.ui.Control_Back_Motor_Control_Slider_Right.sliderReleased.connect(
-            lambda: self.on_slider_back_right_changed(self.ui.Control_Back_Motor_Control_Slider_Right.value()))
+        self.ui.Control_Front_Motor_Control_Slider_Left.valueChanged.connect(self.on_slider_front_left_changed)
+        self.ui.Control_Front_Motor_Control_Slider_Right.valueChanged.connect(self.on_slider_front_right_changed)
+        self.ui.Control_Back_Motor_Control_Slider_Left.valueChanged.connect(self.on_slider_back_left_changed)
+        self.ui.Control_Back_Motor_Control_Slider_Right.valueChanged.connect(self.on_slider_back_right_changed)
         
         self.ui.actionClose_app.triggered.connect(self.close)
         
