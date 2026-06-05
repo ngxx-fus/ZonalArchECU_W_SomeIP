@@ -102,12 +102,28 @@ void HeartBeatRuntime(void* arg) {
         ecuState.Distance.Fields.D2 = dist2_cm & 0x3FF;
         ecuState.Distance.Fields.SyncNum = sync_num & 0x03;
 
-        /* Get actual motor speeds (absolute value to fit 10-bit unsigned field) */
-        ecuState.Motor.Fields.M0 = (abs(MotorGetSpeed0())) & 0x3FF;
-        ecuState.Motor.Fields.M1 = (abs(MotorGetSpeed1())) & 0x3FF;
+        // /* Get actual motor speeds (absolute value to fit 10-bit unsigned field) */
+        // ecuState.Motor.Fields.M0 = (abs(MotorGetSpeed0())) & 0x3FF;
+        // ecuState.Motor.Fields.M1 = (abs(MotorGetSpeed1())) & 0x3FF;
+        // ecuState.Motor.Fields.SyncNum = sync_num & 0x03;
+        // ecuState.Motor.Fields.Reserved = 0;
+        
+        /* Scale actual motor speeds from 0~1024 to -100~100 */
+        int32_t m0 = ((MotorGetSpeed0() * 200) / 1024);
+        int32_t m1 = ((MotorGetSpeed1() * 200) / 1024);
+
+        /* Clamp to valid range */
+        if (m0 > 100)  m0 = 100;
+        if (m0 < -100) m0 = -100;
+
+        if (m1 > 100)  m1 = 100;
+        if (m1 < -100) m1 = -100;
+
+        ecuState.Motor.Fields.M0 = (m0 + 100) & 0xFF;
+        ecuState.Motor.Fields.M1 = (m1 + 100) & 0xFF;
         ecuState.Motor.Fields.SyncNum = sync_num & 0x03;
         ecuState.Motor.Fields.Reserved = 0;
-        
+
         sync_num = (sync_num + 1) % 4;
 
         /* 3. Dispatch the packed UDP payload via the W5500 network layer */

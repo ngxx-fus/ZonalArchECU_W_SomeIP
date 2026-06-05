@@ -12,6 +12,8 @@ ReturnCode_t MotorSetSpeed0(int32_t Speed) {
     if (IsEmergencyStopped) return STAT_ERR;
     if (MotorLock == NULL || Motor == NULL) return STAT_ERR_NULL;
 
+    SysLog("MotorSetSpeed0(...): Requested Speed = %d", Speed);
+
     /* lock resource and update speed0 */
     if (xSemaphoreTake(MotorLock, portMAX_DELAY) == pdTRUE) {
         HBridge_SetSpeed(Motor, (int16_t)Speed, Motor->Speed1);
@@ -27,6 +29,8 @@ ReturnCode_t MotorSetSpeed0(int32_t Speed) {
 ReturnCode_t MotorSetSpeed1(int32_t Speed) {
     if (IsEmergencyStopped) return STAT_ERR;
     if (MotorLock == NULL || Motor == NULL) return STAT_ERR_NULL;
+
+    SysLog("MotorSetSpeed1(...): Requested Speed = %d", Speed);
 
     /* lock resource and update speed1 */
     if (xSemaphoreTake(MotorLock, portMAX_DELAY) == pdTRUE) {
@@ -70,15 +74,15 @@ ReturnCode_t EmergencyStop(void) {
         return STAT_OKE; // Already stopped
     }
 
-    /* lock resource and stop both motors immediately */
-    if (xSemaphoreTake(MotorLock, portMAX_DELAY) == pdTRUE) {
-        IsEmergencyStopped = 1;
-        HBridge_SetSpeed(Motor, 0, 0);
-        HBridge_Apply(Motor); // Force apply to hardware immediately
-        xSemaphoreGive(MotorLock);
-        SysLog("EmergencyStop(...): Motor stopped! (Emergency case)");
-        return STAT_OKE;
-    }
+    // /* lock resource and stop both motors immediately */
+    // if (xSemaphoreTake(MotorLock, portMAX_DELAY) == pdTRUE) {
+    //     IsEmergencyStopped = 1;
+    //     // HBridge_SetSpeed(Motor, 0, 0);
+    //     // HBridge_Apply(Motor); // Force apply to hardware immediately
+    //     xSemaphoreGive(MotorLock);
+    //     SysLog("EmergencyStop(...): Motor stopped! (Emergency case)");
+    //     return STAT_OKE;
+    // }
     return STAT_ERR;
 }
 

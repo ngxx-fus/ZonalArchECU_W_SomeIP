@@ -1,4 +1,16 @@
 #include "TempControlFrame.h"
+#include "../../AppComm/HBridge/Module.h"
+
+static uint16_t ScaleSpeed(int32_t input)
+{
+    // Clamp để tránh giá trị vượt giới hạn
+    if (input < -100)
+        input = -100;
+    if (input > 100)
+        input = 100;
+
+    return (uint16_t)(((input + 100) * 1024) / 200);
+}
 
 /*
  * @brief   Parses the incoming UDP packet and extracts telemetry commands.
@@ -35,6 +47,11 @@ void ParseCCUPacket(const uint8_t *raw_data, size_t len) {
             if (packet->info.eng_ctrl.left_dir == ARG_ENG_FWD) {
                 SysLog("ParseCCUPacket(...): Left Engine Moving Forward at speed offset: %u\n", 
                        packet->info.eng_ctrl.left_speed - 0xFE00A100);
+                int32_t RawValue = packet->info.eng_ctrl.left_speed - 0xFE00A100;
+                uint16_t ScaledSpeed = ScaleSpeed(RawValue);
+                MotorSetSpeed0((int32_t)ScaledSpeed);
+                MotorSetSpeed1((int32_t)ScaledSpeed);
+                HBridge_Apply(Motor);
             }
             /* Terminate switch case */
             break;
