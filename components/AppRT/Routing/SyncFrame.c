@@ -3,7 +3,7 @@
 
 const ECUInfo_t ECUInfo = {
     .Fields = {
-        .ECUName            = "FrontZECU",
+        .ECUName            = "BackZECU",
         .EthMACAddress      = SRC_MAC_ADDR_HEX,
         .IPv4Address        = SRC_IP_ADDR_HEX,
         .IPv4DefPort        = SOMEIP_PORT_VAL
