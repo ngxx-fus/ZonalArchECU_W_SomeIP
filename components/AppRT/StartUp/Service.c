@@ -9,7 +9,7 @@ AppService_t ServiceList[] = {
     /*name*/                /*function ptr*/        /*Stack Size*//*ParamPtr*//*Priority*/          /*TaskHandle*/
     {"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0},
     {"EthRuntime",              W5500CommRuntime,     		2048,           NULL,       eTask_Normal,       0},
-    // {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0},
+    {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0},
     {"HeartBeatRuntime",        HeartBeatRuntime,               2048,           NULL,       eTask_Normal,       0},
     // {"Chaos_Zero",       Dummy0,                 2048,           NULL,       eTask_Normal,       0},
     // {"Chaos_Max",        Dummy1,                 2048,           NULL,       eTask_Low,          0},

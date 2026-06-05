@@ -13,6 +13,9 @@ GenericDeque_t  *   RxDeque;
 
 #define SOCKET_1_UDP_PORT SOMEIP_PORT_HEX
 
+/* PRIVATE STATE **********************************************************************************************************/
+static ReturnCode_t Eth_LastTxStatus = STAT_OKE;
+
 /* INTERNAL TASK **********************************************************************************************************/
 
 static EthRxCallback_t Eth_RxCallback = NULL;
@@ -116,8 +119,26 @@ static void W5500_TaskComm_SocketNSendUDP(PacketSlot_t* tx_pkt) {
     Word_t bsb_reg = eBSB_Socket1Register;
     Word_t bsb_tx_buf = eBSB_Socket1TxBuffer;
 
+    /* Check Link Status first */
+    if (Eth_GetLinkStatus() != STAT_OKE) {
+        SysLog("W5500_TaskComm_SocketNSendUDP(...): No LAN connection, packet dropped.");
+        Eth_LastTxStatus = STAT_ERR_IO;
+        return;
+    }
+
     SysLog("W5500_TaskComm_SocketNSendUDP(...): UDP Transmit %d bytes to %u.%u.%u.%u:%u", 
         tx_pkt->Size, tx_pkt->SrcIP.Byte[0], tx_pkt->SrcIP.Byte[1], tx_pkt->SrcIP.Byte[2], tx_pkt->SrcIP.Byte[3], tx_pkt->SrcPort.Word);
+
+    /* Wait until W5500 is ready to accept a new command (prevents overwriting eSn_CR) */
+    while (W5500_ReadByteReg(Eth, bsb_reg, eSn_CR) != 0x00) {
+        taskYIELD();
+    }
+
+    /* Wait for sufficient free size in TX buffer to avoid pointer override */
+    Word_t free_size = 0;
+    while ((free_size = (Word_t)W5500_ReadDoubleByteReg(Eth, bsb_reg, eSn_TX_FSR0)) < tx_pkt->Size) {
+        taskYIELD();
+    }
 
     W5500_WriteNByteReg(Eth, bsb_reg, eSn_DIPR0, tx_pkt->SrcIP.Byte, 4);
     W5500_WriteDoubleByteReg(Eth, bsb_reg, eSn_DPORT0, tx_pkt->SrcPort.Word);
@@ -126,7 +147,48 @@ static void W5500_TaskComm_SocketNSendUDP(PacketSlot_t* tx_pkt) {
     W5500_WriteNByteReg(Eth, bsb_tx_buf, tx_wr, tx_pkt->Data, tx_pkt->Size);
     W5500_WriteDoubleByteReg(Eth, bsb_reg, eSn_TX_WR0, tx_wr + tx_pkt->Size);
 
+    /* Clear previous SEND_OK and TIMEOUT flags before issuing SEND command */
+    W5500_WriteByteReg(Eth, bsb_reg, eSn_IR, 0x18);
+
     W5500_WriteByteReg(Eth, bsb_reg, eSn_CR, 0x20);
+
+    /* Wait for the SEND command to complete (SEND_OK or TIMEOUT) */
+    Byte_t Sn_IR = 0;
+    uint32_t wait_ticks = 0;
+    Word_t expected_tx_rd = tx_wr + tx_pkt->Size;
+
+    while(1) {
+        Sn_IR = (Byte_t)W5500_ReadByteReg(Eth, bsb_reg, eSn_IR);
+        if (Sn_IR & 0x10) { /* SEND_OK */
+            W5500_WriteByteReg(Eth, bsb_reg, eSn_IR, 0x10);
+            
+            /* HARDWARE GLITCH CHECK: Verify if TX_RD actually caught up to TX_WR */
+            Word_t current_tx_rd = (Word_t)W5500_ReadDoubleByteReg(Eth, bsb_reg, eSn_TX_RD0);
+            if (current_tx_rd != expected_tx_rd) {
+                SysLog("W5500_TaskComm_SocketNSendUDP: SPI Glitch detected! TX_RD not updated. Re-issuing SEND.");
+                while (W5500_ReadByteReg(Eth, bsb_reg, eSn_CR) != 0x00) { taskYIELD(); }
+                W5500_WriteByteReg(Eth, bsb_reg, eSn_CR, 0x20);
+                wait_ticks = 0;
+                continue;
+            }
+            
+            Eth_LastTxStatus = STAT_OKE;
+            break;
+        }
+        if (Sn_IR & 0x08) { /* TIMEOUT */
+            W5500_WriteByteReg(Eth, bsb_reg, eSn_IR, 0x08);
+            SysLog("W5500_TaskComm_SocketNSendUDP(...): UDP Transmit TIMEOUT!");
+            Eth_LastTxStatus = STAT_ERR_TIMEOUT;
+            break;
+        }
+        
+        wait_ticks++;
+        if (wait_ticks > 100) {
+            vTaskDelay(pdMS_TO_TICKS(1));
+        } else {
+            taskYIELD();
+        }
+    }
 }
 
 /*
@@ -447,6 +509,24 @@ ReturnCode_t Eth_SetUDPBufferSize(uint8_t TxSizeKB, uint8_t RxSizeKB) {
     W5500_WriteByteReg(Eth, eBSB_Socket1Register, eSn_RXBUF_SIZE, RxSizeKB);
     /* Conclude buffer setup */
     return STAT_OKE;
+}
+
+/*
+ * @brief Check the PHY Link Status to verify LAN connection.
+ * @return ReturnCode_t STAT_OKE if connected, STAT_ERR otherwise.
+ */
+ReturnCode_t Eth_GetLinkStatus(void) {
+    if (Eth == NULL) return STAT_ERR_INVALID_STATE;
+    Byte_t phy_cfg = (Byte_t)W5500_ReadByteReg(Eth, eBSB_CommonRegister, ePHYCFGR);
+    return (phy_cfg & 0x01) ? STAT_OKE : STAT_ERR;
+}
+
+/*
+ * @brief Get the status of the last transmission attempt.
+ * @return ReturnCode_t The last Tx status.
+ */
+ReturnCode_t Eth_GetLastTxStatus(void) {
+    return Eth_LastTxStatus;
 }
 
 /*

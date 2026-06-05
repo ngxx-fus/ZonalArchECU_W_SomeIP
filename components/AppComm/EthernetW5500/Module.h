@@ -23,6 +23,9 @@ ReturnCode_t EthSetIPv4SourceAddress(uint32_t IPv4Addr);
 
 ReturnCode_t Eth_SetUDPBufferSize(uint8_t TxSizeKB, uint8_t RxSizeKB);
 
+ReturnCode_t Eth_GetLinkStatus(void);
+ReturnCode_t Eth_GetLastTxStatus(void);
+
 ReturnCode_t Eth_GetRxPacket(PacketSlot_t** pkt);
 ReturnCode_t Eth_GetTxPacket(PacketSlot_t** pkt);
 ReturnCode_t Eth_GetUDPPacket(PacketSlot_t** pkt);

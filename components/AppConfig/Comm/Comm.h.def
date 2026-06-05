@@ -20,6 +20,8 @@ typedef uint32_t Dword_t;
 /// @brief 64-bit unsigned integer type
 typedef uint64_t Qword_t;
 
+#define ECUNAME_STR "FrontZECU"
+
 /// GENERATED SECTION | BEGIN /////////////////////////////////////////////////
 /// GENERATED SECTION | END   /////////////////////////////////////////////////
 
