@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1415</width>
-    <height>554</height>
+    <width>1404</width>
+    <height>802</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -20,7 +20,7 @@
       <x>10</x>
       <y>20</y>
       <width>651</width>
-      <height>481</height>
+      <height>511</height>
      </rect>
     </property>
     <property name="title">
@@ -41,8 +41,8 @@
      <widget class="QLabel" name="Visualization_Back_Distance_Sensor_Right">
       <property name="geometry">
        <rect>
-        <x>200</x>
-        <y>240</y>
+        <x>190</x>
+        <y>230</y>
         <width>66</width>
         <height>31</height>
        </rect>
@@ -57,8 +57,8 @@
      <widget class="QLabel" name="Visualization_Back_Distance_Sensor_Left">
       <property name="geometry">
        <rect>
-        <x>30</x>
-        <y>240</y>
+        <x>50</x>
+        <y>230</y>
         <width>66</width>
         <height>31</height>
        </rect>
@@ -73,8 +73,8 @@
      <widget class="QLabel" name="Visualization_Back_Distance_Sensor_Center">
       <property name="geometry">
        <rect>
-        <x>110</x>
-        <y>270</y>
+        <x>120</x>
+        <y>230</y>
         <width>66</width>
         <height>31</height>
        </rect>
@@ -89,8 +89,8 @@
      <widget class="QLabel" name="Visualization_YourDeviceBox">
       <property name="geometry">
        <rect>
-        <x>70</x>
-        <y>100</y>
+        <x>80</x>
+        <y>80</y>
         <width>140</width>
         <height>140</height>
        </rect>
@@ -125,8 +125,8 @@
      <widget class="QLabel" name="Visualization_Front_Distance_Sensor_Left">
       <property name="geometry">
        <rect>
-        <x>30</x>
-        <y>70</y>
+        <x>50</x>
+        <y>40</y>
         <width>66</width>
         <height>31</height>
        </rect>
@@ -141,8 +141,8 @@
      <widget class="QLabel" name="Visualization_Front_Distance_Sensor_Right">
       <property name="geometry">
        <rect>
-        <x>200</x>
-        <y>70</y>
+        <x>190</x>
+        <y>40</y>
         <width>66</width>
         <height>31</height>
        </rect>
@@ -157,7 +157,7 @@
      <widget class="QLabel" name="Visualization_Front_Distance_Sensor_Center">
       <property name="geometry">
        <rect>
-        <x>110</x>
+        <x>120</x>
         <y>40</y>
         <width>66</width>
         <height>31</height>
@@ -168,6 +168,90 @@
       </property>
       <property name="alignment">
        <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="Visualization_EngineSelect_FrontRight">
+      <property name="geometry">
+       <rect>
+        <x>230</x>
+        <y>80</y>
+        <width>51</width>
+        <height>41</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Eng</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="Visualization_EngineSelect_BackRight">
+      <property name="geometry">
+       <rect>
+        <x>230</x>
+        <y>180</y>
+        <width>51</width>
+        <height>41</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Eng</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="Visualization_EngineSelect_BackLeft">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>180</y>
+        <width>51</width>
+        <height>41</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Eng</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="Visualization_EngineSelect_FrontLeft">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>80</y>
+        <width>51</width>
+        <height>41</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Eng</string>
+      </property>
+     </widget>
+     <widget class="QSpinBox" name="Visualization_EngineSpeedSpinBox">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>270</y>
+        <width>81</width>
+        <height>27</height>
+       </rect>
+      </property>
+      <property name="minimum">
+       <number>-100</number>
+      </property>
+      <property name="maximum">
+       <number>100</number>
+      </property>
+      <property name="stepType">
+       <enum>QAbstractSpinBox::DefaultStepType</enum>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="Visualization_EngineSpeed_Set">
+      <property name="geometry">
+       <rect>
+        <x>190</x>
+        <y>270</y>
+        <width>88</width>
+        <height>31</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Set speed</string>
       </property>
      </widget>
     </widget>
@@ -340,7 +424,7 @@
       <property name="geometry">
        <rect>
         <x>200</x>
-        <y>80</y>
+        <y>70</y>
         <width>88</width>
         <height>31</height>
        </rect>
@@ -353,7 +437,7 @@
       <property name="geometry">
        <rect>
         <x>200</x>
-        <y>130</y>
+        <y>110</y>
         <width>88</width>
         <height>31</height>
        </rect>
@@ -401,14 +485,118 @@
        <string>0%</string>
       </property>
      </widget>
+     <widget class="QSpinBox" name="Control_EngineSpeedSpinBox">
+      <property name="geometry">
+       <rect>
+        <x>200</x>
+        <y>220</y>
+        <width>81</width>
+        <height>27</height>
+       </rect>
+      </property>
+      <property name="minimum">
+       <number>-100</number>
+      </property>
+      <property name="maximum">
+       <number>100</number>
+      </property>
+      <property name="stepType">
+       <enum>QAbstractSpinBox::DefaultStepType</enum>
+      </property>
+     </widget>
+     <widget class="QComboBox" name="Control_EngineSelect_Front">
+      <property name="geometry">
+       <rect>
+        <x>200</x>
+        <y>190</y>
+        <width>86</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="editable">
+       <bool>false</bool>
+      </property>
+      <property name="currentText">
+       <string>Back_LR</string>
+      </property>
+      <item>
+       <property name="text">
+        <string>Back_LR</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Back_L</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Back_R</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>None</string>
+       </property>
+      </item>
+     </widget>
+     <widget class="QComboBox" name="Control_EngineSelect_Front_2">
+      <property name="geometry">
+       <rect>
+        <x>200</x>
+        <y>160</y>
+        <width>86</width>
+        <height>26</height>
+       </rect>
+      </property>
+      <property name="editable">
+       <bool>false</bool>
+      </property>
+      <property name="currentText">
+       <string>Front_LR</string>
+      </property>
+      <item>
+       <property name="text">
+        <string>Front_LR</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Front_L</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>Front_R</string>
+       </property>
+      </item>
+      <item>
+       <property name="text">
+        <string>None</string>
+       </property>
+      </item>
+     </widget>
+     <widget class="QPushButton" name="Control_EngineSpeed">
+      <property name="geometry">
+       <rect>
+        <x>200</x>
+        <y>250</y>
+        <width>88</width>
+        <height>31</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Set speed</string>
+      </property>
+     </widget>
     </widget>
-    <widget class="QLabel" name="label">
+    <widget class="QLabel" name="Visualization_MonitorApp_Status">
      <property name="geometry">
       <rect>
        <x>10</x>
        <y>360</y>
        <width>621</width>
-       <height>101</height>
+       <height>91</height>
       </rect>
      </property>
      <property name="frameShape">
@@ -421,16 +609,90 @@
       <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
      </property>
     </widget>
+    <widget class="QGroupBox" name="Visualization_MonitorApp_StatusControl_Box">
+     <property name="geometry">
+      <rect>
+       <x>460</x>
+       <y>460</y>
+       <width>191</width>
+       <height>51</height>
+      </rect>
+     </property>
+     <property name="title">
+      <string/>
+     </property>
+     <widget class="QPushButton" name="Visualization_MonitorApp_Status_Copy2Clipboard">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>10</y>
+        <width>88</width>
+        <height>31</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Copy</string>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="Visualization_MonitorApp_Status_Clear">
+      <property name="geometry">
+       <rect>
+        <x>100</x>
+        <y>10</y>
+        <width>88</width>
+        <height>31</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Clear</string>
+      </property>
+     </widget>
+    </widget>
    </widget>
-   <widget class="QWidget" name="Graph" native="true">
+   <widget class="QStackedWidget" name="stackedWidget">
     <property name="geometry">
      <rect>
-      <x>670</x>
+      <x>680</x>
       <y>40</y>
-      <width>721</width>
-      <height>461</height>
+      <width>641</width>
+      <height>491</height>
      </rect>
     </property>
+    <property name="frameShape">
+     <enum>QFrame::Box</enum>
+    </property>
+    <property name="currentIndex">
+     <number>0</number>
+    </property>
+    <widget class="QWidget" name="Graph_Stack">
+     <widget class="QWidget" name="Graph_ECUStatus" native="true">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>30</y>
+        <width>611</width>
+        <height>431</height>
+       </rect>
+      </property>
+     </widget>
+    </widget>
+    <widget class="QWidget" name="page_2">
+     <widget class="QWebEngineView" name="Graph_ECUStatus_GPSMap">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>10</y>
+        <width>621</width>
+        <height>471</height>
+       </rect>
+      </property>
+      <property name="url">
+       <url>
+        <string>about:blank</string>
+       </url>
+      </property>
+     </widget>
+    </widget>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">
@@ -438,7 +700,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1415</width>
+     <width>1404</width>
      <height>23</height>
     </rect>
    </property>
@@ -449,7 +711,15 @@
     <addaction name="actionClose"/>
     <addaction name="actionClose_app"/>
    </widget>
+   <widget class="QMenu" name="menuView">
+    <property name="title">
+     <string>View</string>
+    </property>
+    <addaction name="actionGPS_map"/>
+    <addaction name="actionECU_status_graph"/>
+   </widget>
    <addaction name="menuFile"/>
+   <addaction name="menuView"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionClose">
@@ -462,7 +732,24 @@
     <string>Close app</string>
    </property>
   </action>
+  <action name="actionGPS_map">
+   <property name="text">
+    <string>GPS map</string>
+   </property>
+  </action>
+  <action name="actionECU_status_graph">
+   <property name="text">
+    <string>ECU status graph </string>
+   </property>
+  </action>
  </widget>
+ <customwidgets>
+  <customwidget>
+   <class>QWebEngineView</class>
+   <extends>QWidget</extends>
+   <header location="global">QtWebEngineWidgets/QWebEngineView</header>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

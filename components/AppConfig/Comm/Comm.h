@@ -20,7 +20,7 @@ typedef uint32_t Dword_t;
 /// @brief 64-bit unsigned integer type
 typedef uint64_t Qword_t;
 
-#define ECUNAME_STR "BackZECU"
+#define ECUNAME_STR "FrontZECU"
 
 /// GENERATED SECTION | BEGIN /////////////////////////////////////////////////
 #define GW_IP_ADDR_STR "10.0.0.1"
