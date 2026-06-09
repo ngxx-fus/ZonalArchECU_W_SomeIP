@@ -32,13 +32,67 @@ void App_EthernetRxCallback(PacketSlot_t* pkt) {
     }
 }
 
+extern int32_t ConvertRawToPercent(int32_t rawValue);
+
+void App_SendImmediateHeartbeat(void) {
+    SF_ECUState_t ecuState;
+    memset(&ecuState, 0, sizeof(SF_ECUState_t));
+    memcpy(&ecuState.ECUInfo, &ECUInfo, sizeof(ECUInfo));
+
+    static uint8_t sync_num_immediate = 0;
+
+    /* Use latest cached ultrasonic readings (do not trigger new measurements) */
+    uint16_t dist0_mm = HCSR04_GetLatestDistanceMm(0);
+    uint16_t dist1_mm = HCSR04_GetLatestDistanceMm(1);
+    uint16_t dist2_mm = HCSR04_GetLatestDistanceMm(2);
+
+    uint16_t dist0_cm = (dist0_mm != 0xFFFFU) ? (dist0_mm / 10U) : 0x3FF;
+    uint16_t dist1_cm = (dist1_mm != 0xFFFFU) ? (dist1_mm / 10U) : 0x3FF;
+    uint16_t dist2_cm = (dist2_mm != 0xFFFFU) ? (dist2_mm / 10U) : 0x3FF;
+
+    ecuState.Distance.Fields.D0 = dist0_cm & 0x3FF;
+    ecuState.Distance.Fields.D1 = dist1_cm & 0x3FF;
+    ecuState.Distance.Fields.D2 = dist2_cm & 0x3FF;
+    ecuState.Distance.Fields.SyncNum = sync_num_immediate & 0x03;
+
+    /* Read latest motor speeds and convert */
+    int32_t m0 = ConvertRawToPercent(MotorGetSpeed0());
+    int32_t m1 = ConvertRawToPercent(MotorGetSpeed1());
+
+    ecuState.Motor.Fields.M0 = (m0 + 100) & 0xFF;
+    ecuState.Motor.Fields.M1 = (m1 + 100) & 0xFF;
+    ecuState.Motor.Fields.SyncNum = sync_num_immediate & 0x03;
+    ecuState.Motor.Fields.Reserved = 0;
+
+    sync_num_immediate = (sync_num_immediate + 1) % 4;
+
+    ReturnCode_t ret = Eth_SendUDPPacket(CCU_IP_ADDR, CCU_UDP_PORT, (uint8_t*)&ecuState, sizeof(SF_ECUState_t));
+    if (ret == STAT_OKE) {
+        SysLog("App_SendImmediateHeartbeat: Sent ECU State -> D0: %u, D1: %u, D2: %u, M0: %u, M1: %u, SyncNum: %u",
+               ecuState.Distance.Fields.D0,
+               ecuState.Distance.Fields.D1,
+               ecuState.Distance.Fields.D2,
+               ecuState.Motor.Fields.M0,
+               ecuState.Motor.Fields.M1,
+               ecuState.Distance.Fields.SyncNum);
+    } else {
+        SysErr("App_SendImmediateHeartbeat: Failed to send ECU State! Error: %d", ret);
+    }
+}
+
+void App_EthernetResponse(PacketSlot_t* pkt){
+    (void) pkt;
+    /* Send immediate heartbeat using cached sensor values and current motor speeds */
+    App_SendImmediateHeartbeat();
+}
+
 void Eth_CallBackSetUp(){
     /* Register the application-level Rx callback to the Ethernet module */
     Eth_SetRxCallback(App_EthernetRxCallback);
+    /* Route execution to register the Ethernet response callback */
+    Eth_SetResponseFunction(App_EthernetResponse);
     SysLog("Eth_CallBackSetUp(...): Application Ethernet Rx Callback registered successfully.");
 }
-
-extern int32_t ConvertRawToPercent(int32_t rawValue);
 
 /*
  * @brief High-level control task to collect and transmit ECU state periodically.
@@ -138,7 +192,8 @@ void HeartBeatRuntime(void* arg) {
         }
 
         /* 4. Suspend task execution for the defined cycle duration */
-        vTaskDelay(pdMS_TO_TICKS(HEART_TASK_CYCLE_MS));
+        /// vTaskDelay(pdMS_TO_TICKS(HEART_TASK_CYCLE_MS));
+        (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(HEART_TASK_CYCLE_MS));
     }
 
     SysExit("HeartBeatRuntime");

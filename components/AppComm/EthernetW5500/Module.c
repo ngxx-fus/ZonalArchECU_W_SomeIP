@@ -11,6 +11,10 @@ TaskHandle_t        W5500CommCtl_TaskHandler;
 GenericDeque_t  *   TxDeque;
 GenericDeque_t  *   RxDeque;
 
+volatile SafeFlag_t      EthCommand;
+
+Eth_ResponseFunction_t Eth_ResponseFunction  = NULL;
+
 #define SOCKET_1_UDP_PORT SOMEIP_PORT_HEX
 
 /* PRIVATE STATE **********************************************************************************************************/
@@ -18,7 +22,7 @@ static ReturnCode_t Eth_LastTxStatus = STAT_OKE;
 
 /* INTERNAL TASK **********************************************************************************************************/
 
-static EthRxCallback_t Eth_RxCallback = NULL;
+static Eth_RxCallback_t Eth_RxCallback = NULL;
 
 /*
  * @brief Log the Ethernet frame details and hex dump (8 bytes per row)
@@ -625,9 +629,27 @@ ReturnCode_t Eth_GetUDPPayload(PacketSlot_t* pkt, uint8_t** payload, uint16_t* s
  * @param cb The callback function pointer.
  * @return ReturnCode_t STAT_OKE on success.
  */
-ReturnCode_t Eth_SetRxCallback(EthRxCallback_t cb) {
+ReturnCode_t Eth_SetRxCallback(Eth_RxCallback_t cb) {
     Eth_RxCallback = cb;
     /* Confirm callback registration */
+    return STAT_OKE;
+}
+
+/*
+ * @brief Register a callback function for received UDP packets.
+ * @param EthResponseFunction The callback function pointer.
+ * @return ReturnCode_t STAT_OKE on success, STAT_ERR_INVALID_ARG otherwise.
+ */
+ReturnCode_t Eth_SetResponseFunction(Eth_ResponseFunction_t EthResponseFunction){
+    /* Route execution to validate the provided function pointer */
+    if(IsNull(EthResponseFunction)){
+        /* Terminate function and yield error due to invalid argument */
+        return STAT_ERR_INVALID_ARG;
+    }
+    
+    Eth_ResponseFunction = EthResponseFunction;
+    
+    /* Terminate function and yield OK status */
     return STAT_OKE;
 }
 
@@ -682,7 +704,19 @@ __attribute__((weak)) void Eth_WeakRxCallback(PacketSlot_t* pkt) {
     }
 }
 
-/* INTERNAL TASK **********************************************************************************************************/
+/*
+ * @brief Set the 2nd-callback function (for trigger heart-beat to make the response immediately)
+ */
+ReturnCode_t Eth_RequestResponseNow(){
+    /* Called while processing a locked packet (SLOT_READING). Checking
+       RxedPacket_Size() here will report 0 and prevent the response flag
+       from being set. Always set the response flag when requested so that
+       W5500CommCtl() can call the registered response function. */
+    SafeFlagSet(&EthCommand, eEthResponseNow);
+    return STAT_OKE;
+}
+
+/* INTERNAL TASK *Eth_RequestResponseNow*********************************************************************************************************/
 
 /*
  * @brief  Serivce handle W5500 module
@@ -738,6 +772,9 @@ void W5500CommRuntime(void* arg){
         
         /* Drain all available packets from the receive queue */
         while((pkt = RxedPacket_GetHighestPriority()) != NULL){
+            SafeFlagSet(&EthCommand, eEthDiscardPacket);
+            SafeFlagClear(&EthCommand, eEthResponseNow);
+
             /* Route to custom callback if registered */
             if (Eth_RxCallback != NULL) {
                 Eth_RxCallback(pkt);
@@ -746,8 +783,14 @@ void W5500CommRuntime(void* arg){
                 Eth_WeakRxCallback(pkt);
             }
             
-            RxedPacket_Release(pkt);
-            SysLog("");
+            if( IsNotNull(Eth_ResponseFunction) && SafeFlagHas(&EthCommand, eEthResponseNow)){
+                Eth_ResponseFunction(pkt);
+            }
+            if(SafeFlagHas(&EthCommand, eEthDiscardPacket)){
+                RxedPacket_Release(pkt);
+                SysLog("");
+            }
+
         }
 
         SysLog("");

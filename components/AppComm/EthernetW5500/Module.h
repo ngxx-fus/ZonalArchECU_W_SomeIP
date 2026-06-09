@@ -9,10 +9,19 @@
 #include "EthernetW5500.h"
 #include "PacketQueue.h"
 
-extern SemaphoreHandle_t    EthLock;
-extern GenericPayload_t     RxedPacket[];
-extern TaskHandle_t         W5500CommCtl_TaskHandler;
+extern SemaphoreHandle_t        EthLock;
+extern GenericPayload_t         RxedPacket[];
+extern TaskHandle_t             W5500CommCtl_TaskHandler;
 
+enum e_EthCommandBitOrder{
+    eEthDiscardPacket           = 0,
+    eEthResponseNow             = 1,
+};
+
+typedef void (*Eth_RxCallback_t)(PacketSlot_t* pkt);
+typedef void (*Eth_ResponseFunction_t)(PacketSlot_t* pkt);
+
+extern void Eth_WeakRxCallback(PacketSlot_t* pkt);
 
 /*Module public APIs*/
 ReturnCode_t IPv4SetGateWayAddress(uint32_t IPv4Addr);
@@ -33,9 +42,11 @@ ReturnCode_t Eth_GetUDPPacket(PacketSlot_t** pkt);
 ReturnCode_t Eth_GetUDPInfo(PacketSlot_t* pkt, uint8_t* srcIP, uint16_t* srcPort, uint8_t* srcMAC);
 ReturnCode_t Eth_GetUDPPayload(PacketSlot_t* pkt, uint8_t** payload, uint16_t* size);
 
-typedef void (*EthRxCallback_t)(PacketSlot_t* pkt);
-ReturnCode_t Eth_SetRxCallback(EthRxCallback_t cb);
-void Eth_WeakRxCallback(PacketSlot_t* pkt);
+ReturnCode_t Eth_RequestResponseNow();
+
+ReturnCode_t Eth_SetRxCallback(Eth_RxCallback_t cb);
+
+ReturnCode_t Eth_SetResponseFunction(Eth_ResponseFunction_t EthResponseFunction);
 
 /* Logging utilities */
 void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, GenericPtr_t DstMAC);

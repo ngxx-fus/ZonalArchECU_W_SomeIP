@@ -11,6 +11,8 @@
 #define SCALE_OUT_NEGATIVE_ABS_MIN_VAL   (0)
 #define SCALE_OUT_NEGATIVE_ABS_MAX_VAL   (100)
 
+extern ReturnCode_t Eth_RequestResponseNow();
+
 /*
  * @brief Converts raw PWM/ADC input value to scaled percentage speed.
  * @param rawValue The raw input value (e.g., -1024 to 1024).
@@ -138,6 +140,7 @@ void ParseCCUPacket(const uint8_t *raw_data, size_t len) {
             MotorSetSpeed0(ConvertPercentToRaw(left_percent));
             MotorSetSpeed1(ConvertPercentToRaw(right_percent));
             HBridge_Apply(Motor);
+            Eth_RequestResponseNow();
             /* Terminate switch case */
             break;
         }
