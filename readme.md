@@ -117,3 +117,7 @@ fus@fus-X409FA ZonalArchECU_W_SomeIP git:(Lab)
 
 ```
 
+# Demo 
+
+![img0](./docs/.imgs/demo-control-app-graph.png)
+![img0](./docs/.imgs/demo-control-app-gps.png)

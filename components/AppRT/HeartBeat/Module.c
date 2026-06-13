@@ -490,7 +490,7 @@ void HeartBeatRuntime(void* arg) {
         /// SysLog("HeartBeatRuntime(...): Adjusted, m0=%d, m0=%d", m0, m1);
 
         /* 2. Pack the retrieved information into the generic frame structure */
-        App_WriteFrame_HeartBeat(&tx_frame, sync_num, dist0_cm, dist1_cm, dist2_cm, (int8_t)m0, (int8_t)m1, 0, 0);
+        App_WriteFrame_HeartBeat(&tx_frame, sync_num, dist0_cm, dist1_cm, dist2_cm, (int8_t)m0, (int8_t)m1, Loc_Long, Loc_Lat);
 
         sync_num = (sync_num + 1) % 4;
 

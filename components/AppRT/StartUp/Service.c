@@ -7,10 +7,11 @@
 #ifndef E_SERVICE_INDEX_LIST
     #define E_SERVICE_INDEX_LIST
 	typedef enum eServiceIndexList{
-		eSERVICE_MORTOR_RUNTIME = 0,
-		eSERVICE_ETHERNET_RUNTIME = 1,
-		eSERVICE_ULTRA_SONIC_RUNTIME = 2,
-		eSERVICE_HEART_BEAT_RUNTIME = 3
+		eSERVICE_MORTOR_RUNTIME 		= 0,
+		eSERVICE_ETHERNET_RUNTIME 		= 1,
+		eSERVICE_ULTRA_SONIC_RUNTIME 	= 2,
+		eSERVICE_HEART_BEAT_RUNTIME 	= 3,
+		eSERVICE_LOCATION_RUNTIME		= 4
 	};
 #endif
 
@@ -25,6 +26,8 @@ AppService_t ServiceList[] = {
 	{"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
     [eSERVICE_ULTRA_SONIC_RUNTIME] =
     {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
+	[eSERVICE_LOCATION_RUNTIME] =
+	{"LocRuntime",              Loc_Runtime,                2048,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
 };
 
 /// @brief Initializes and creates tasks for all services defined in ServiceList

@@ -798,15 +798,26 @@ class MyMonitorApp(QMainWindow):
     #  * @param payload Dictionary containing extracted payload attributes.
     #  */
     def process_incoming_data(self, payload):
+        global GLOBAL_LAT, GLOBAL_LON
+
         msg_type = payload.get("type", "HeartBeat")
         if msg_type == "AuthTX":
             self.handle_auth_tx(payload)
             return
             
+        # /* Update global GPS coordinates if valid data is present in payload */
+        loc_lat = payload.get("loc_lat", 0)
+        loc_long = payload.get("loc_long", 0)
+        if loc_lat > 0 and loc_long > 0:
+            GLOBAL_LAT = loc_lat / 1000000.0
+            GLOBAL_LON = loc_long / 1000000.0
+
         self.global_packet_count += 1
         ecu_name = payload["name"]
         
-        SysLog("Processing incoming packet from ECU: %s", ecu_name)
+        SysLog("Processing incoming packet from ECU: %s | D0:%dcm D1:%dcm D2:%dcm | M0:%d%% M1:%d%% | Lat:%d Lon:%d | Sync:%d", 
+               ecu_name, payload.get("d0", 0), payload.get("d1", 0), payload.get("d2", 0),
+               payload.get("m0", 0), payload.get("m1", 0), loc_lat, loc_long, payload.get("dist_sync", 0))
         
         ecu_type = None
         ecu_name_lower = ecu_name.lower()

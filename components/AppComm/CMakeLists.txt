@@ -42,6 +42,7 @@ idf_component_register(
         esp_driver_ledc
         esp_hal_gpspi
         esp_rom
+        esp_driver_uart
 )
 
 

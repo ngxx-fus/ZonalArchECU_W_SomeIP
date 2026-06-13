@@ -38,6 +38,10 @@ ZECU:
       ECHO_C: { Macro: "PIN_US_C_ECHO", Type: UInt, Value: 35 }
       ECHO_R: { Macro: "PIN_US_R_ECHO", Type: UInt, Value: 32 }
 
+    Loc_ATHM336H:
+      TXD:    { Macro: "PIN_LOC_TXD",   Type: UInt, Value: 21 }
+      RXD:    { Macro: "PIN_LOC_RXD",   Type: UInt, Value: 22 }
+
   Network:
     Gateway:
       IPv4: 
