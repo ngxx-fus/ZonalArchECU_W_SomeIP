@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.22)
 ##DEPRECATED## set(
 ##DEPRECATED##     EXTRA_COMPONENT_DIRS        
 ##DEPRECATED##     "AppESPWrap"
-##DEPRECATED##     "AppUtils"
+##DEPRECATED##     "AppBase"
 ##DEPRECATED##     "AppConfig"
 ##DEPRECATED##     "AppComm"
 ##DEPRECATED##     "AppRT"

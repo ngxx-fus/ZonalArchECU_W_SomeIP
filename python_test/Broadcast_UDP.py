@@ -97,7 +97,7 @@ def send_and_receive_echo(target_ip, target_port, seq_num):
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
     sock.settimeout(0.5)
     
-    magic_header = struct.pack(">BBH", 0xAA, 0x55, seq_num)
+    magic_header = struct.pack(">BBH", 0xAA, 0xAA, seq_num)
     payload_text = f"ECHO_PLT_{seq_num:04d}".encode('utf-8')
     full_payload = magic_header + payload_text
     

@@ -1,3 +1,0 @@
-Checking "python3" ...
-Python 3.13.12
-"python3" has been detected

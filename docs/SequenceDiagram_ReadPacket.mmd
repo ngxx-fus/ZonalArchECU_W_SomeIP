@@ -42,7 +42,7 @@ sequenceDiagram
     Queue->>Queue: Atomic CAS: SLOT_READY -> SLOT_READING
     Queue-->>-MainTask: Return ptr to PacketPool[best_idx]
     
-    MainTask->>MainTask: (9) W5500_LogFrame (Hex/ASCII dump)
+    MainTask->>MainTask: (9) Eth_LogFrame (Hex/ASCII dump)
     
     Note over MainTask, Queue: Cleanup (No memory deallocation)
     MainTask->>+Queue: (10) RxedPacket_Release(pkt)

@@ -5,7 +5,7 @@
 static UltraSonic_t *g_ultra = NULL;
 
 uint16_t HCSR04_GetLatestDistanceMm(uint8_t index) {
-    uint16_t dist = 0xFFFF;
+    uint16_t dist = 0x0U;
     if (g_ultra != NULL) {
         (void)UltraSonic_GetDistance(g_ultra, index, &dist);
     }
@@ -16,6 +16,8 @@ void HCSR04Runtime(void *arg) {
     (void)arg;
     SysEntry("HCSR04Ctl");
 
+    while(4 >= GlobalInit_GetLevel()){vTaskDelay(pdMS_TO_TICKS(50));}
+    
     g_ultra = UltraSonic_CreateDefault();
     if (g_ultra == NULL) {
         SysErr("[HCSR04Ctl] Ultrasonic object allocation failed");
@@ -30,6 +32,8 @@ void HCSR04Runtime(void *arg) {
         return;
     }
 
+    GlobalInit_MoveNextLevel();
+
     SysLog("[HCSR04Ctl] Start collecting ultrasonic distance");
     while (1) {
         unsigned count;
@@ -38,12 +42,12 @@ void HCSR04Runtime(void *arg) {
         count = (unsigned)UltraSonic_GetCount(g_ultra);
 
         for (unsigned i = 0; i < count; ++i) {
-            unsigned distanceMm = 0xFFFFU;
-            uint16_t rawDistance = 0xFFFFU;
+            unsigned distanceMm = 0x0U;
+            uint16_t rawDistance = 0x0U;
             (void)UltraSonic_GetDistance(g_ultra, (uint8_t)i, &rawDistance);
             distanceMm = (unsigned)rawDistance;
 
-            if (distanceMm == 0xFFFFU) {
+            if (distanceMm == 0x0U) {
                 SysLog("[HCSR04Ctl] S%u=timeout", (unsigned)i);
             } else {
                 unsigned distanceCmX10 = distanceMm;

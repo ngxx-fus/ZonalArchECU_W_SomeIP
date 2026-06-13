@@ -75,38 +75,51 @@ HBridge_t * HBridge_Create(Pin_t IN0, Pin_t IN1, Pin_t IN2, Pin_t IN3) {
 }
 
 ReturnCode_t HBridge_Apply(HBridge_t * Ptr) {
+    /* Control flow: check for null pointer before proceeding */
     if (Ptr == NULL) {
+        SysLog("HBridge_Apply(...): Null pointer provided");
+        /* Control flow: return error due to null pointer */
         return STAT_ERR_NULL;
     }
 
-    /* this is a comment - update both timers and re-register all pins */
+    /* Control flow: update both timers and re-register all pins if pin flag is set */
     if (SafeFlagHas(&Ptr->Flag, eHBridge_ModifiedPin)) {
+        SysLog("HBridge_Apply(...): Pin configuration modified, applying changes");
         __IHF__SetTimer(Ptr, 0);
         __IHF__SetTimer(Ptr, 1);
+        
+        /* Control flow: iterate through all 4 GPIO channels to register them */
         for (int32_t i = 0; i < 4; i++) {
             __IHF__RegisterGPIO(Ptr, i);
         }
         SafeFlagClear(&Ptr->Flag, eHBridge_ModifiedPin);
     }
 
-    /* this is a comment - apply duty cycles based on motor speeds */
+    /* Control flow: apply duty cycles based on motor speeds if speed flag is set */
     if (SafeFlagHas(&Ptr->Flag, eHBridge_ModifiedSpeed)) {
+        SysLog("HBridge_Apply(...): Speed modified, applying duty cycles");
         uint32_t MaxDuty = (1UL << Ptr->Config.Resolution) - 1;
 
+        /* Control flow: update forward/reverse channels for both motors */
         for (int32_t i = 0; i < 2; i++) {
             uint8_t Base = i * 2;
+            
+            /* Control flow: determine forward and reverse duty values */
             uint32_t Fwd = (Ptr->Speed[i] > 0) ? (uint32_t)Ptr->Speed[i] : 0;
             uint32_t Rev = (Ptr->Speed[i] < 0) ? (uint32_t)(-Ptr->Speed[i]) : 0;
 
-            /* this is a comment - update forward/reverse channels for each motor */
+            /* Control flow: set and update duty for forward channel */
             ledc_set_duty(Ptr->Config.Mode, Ptr->Config.Channels[Base], (Fwd > MaxDuty) ? MaxDuty : Fwd);
             ledc_update_duty(Ptr->Config.Mode, Ptr->Config.Channels[Base]);
             
+            /* Control flow: set and update duty for reverse channel */
             ledc_set_duty(Ptr->Config.Mode, Ptr->Config.Channels[Base + 1], (Rev > MaxDuty) ? MaxDuty : Rev);
             ledc_update_duty(Ptr->Config.Mode, Ptr->Config.Channels[Base + 1]);
         }
         SafeFlagClear(&Ptr->Flag, eHBridge_ModifiedSpeed);
     }
+    
+    /* Control flow: return success after processing all flags */
     return STAT_OKE;
 }
 

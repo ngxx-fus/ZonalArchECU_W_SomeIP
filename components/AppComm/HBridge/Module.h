@@ -2,7 +2,7 @@
 #define __HBRIDGE_MODULE_H__
 
 #include "../../AppESPWrap/All.h"
-#include "../../AppUtils/All.h"
+#include "../../AppBase/All.h"
 #include "./HBridge.h"
 
 /* --- GLOBAL DATA EXPOSURE --- */
@@ -11,6 +11,12 @@ extern HBridge_t *          Motor;        /* Global Motor instance pointer */
 extern SemaphoreHandle_t    MotorLock;    /* Mutex for synchronized motor access */
 
 /* --- INTER-COMMUNICATION FUNCTIONS --- */
+
+/// @brief 
+/// @param Speed0 
+/// @param Speed1 
+/// @return 
+ReturnCode_t MotorSetSpeed(int16_t Speed0, int16_t Speed1);
 
 /// @brief Set speed for Motor 0 (Channel A)
 /// @param Speed Target speed value (-1023 to 1023)

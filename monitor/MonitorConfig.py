@@ -8,6 +8,23 @@ LOG_DEBUG = 1
 LOG_INFO = 1
 LOG_ERROR = 2
 
+# /* ========================================================================= */
+# /* SYSTEM LIMITS & BEHAVIOR CONFIGURATIONS                                   */
+# /* ========================================================================= */
+MAX_NUM_POINT = 50
+SCALE_BASE_ON_LOCAL_MAX_VAL = 1 
+
+MAX_MOTOR_SPEED_VAL = [100, 100, 100, 100]
+MIN_MOTOR_SPEED_VAL = [-100, -100, -100, -100]
+
+MAX_DISTANCE_VAL = [5.0, 5.0, 5.0, 5.0, 5.0, 5.0]
+MIN_DISTANCE_VAL = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+
+MAX_NUM_FRONT_ZECU = 1
+MAX_NUM_BACK_ZECU = 1
+ALLOW_AUTO_REPACE_ZECU = 0
+
+
 """
 /*
  * @brief   Log a debug message.

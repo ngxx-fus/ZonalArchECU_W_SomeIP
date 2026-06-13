@@ -200,7 +200,9 @@ def display_plt(max_points=50):
 
         # /* Update line data */
         lines["dist_seq"].set_data(x_data, y_dist_seq)
-        lines["motor_seq"].set_data(x_data, y_motor_seq)
+        
+        y_motor_seq_offset = [v + 0.1 for v in y_motor_seq]
+        lines["motor_seq"].set_data(x_data, y_motor_seq_offset)
         lines["d0"].set_data(x_data, y_d0)
         lines["d1"].set_data(x_data, y_d1)
         lines["d2"].set_data(x_data, y_d2)
@@ -279,9 +281,9 @@ def process_ecu_timing(stats, dist_sync):
 #  * @param packet The raw bytes of the incoming packet
 #  */
 def parse_application_data(packet):
-    # /* Guard clause: verify packet meets the minimum size requirement */
-    if len(packet) < EXPECTED_PACKET_SIZE:
-        log(f"Dropped fragment: Size {len(packet)} < {EXPECTED_PACKET_SIZE}")
+    # /* Guard clause: verify packet meets the exact size requirement */
+    if len(packet) != EXPECTED_PACKET_SIZE:
+        log(f"Dropped fragment: Size {len(packet)} != {EXPECTED_PACKET_SIZE}")
         
         # /* Abort parsing due to invalid packet dimension */
         return

@@ -1,7 +1,7 @@
 #include "PacketQueue.h"
 
-#define MAX_NUM_RXED_PACKETS 16
-#define MAX_NUM_TXED_PACKETS 16
+#define MAX_NUM_RXED_PACKETS 32
+#define MAX_NUM_TXED_PACKETS 32
 
 /* Static pool allocations without dynamic memory usage */
 PacketSlot_t RxPool[MAX_NUM_RXED_PACKETS];

@@ -22,6 +22,9 @@
     #define CCU_UDP_PORT CCU_IPV4_PORT
 #endif /*CCU_UDP_PORT*/
 
+/// @brief Wake-up heartbeat thread
+void HeartBeat_WakeUp();
+
 /// @brief Initialize and start the High-level Heart Task for ZECU
 /// @details This task cyclically gathers data from ultrasonic and motor, 
 /// formats it with E2E protection, and sends a UDP Sync frame to the CCU.

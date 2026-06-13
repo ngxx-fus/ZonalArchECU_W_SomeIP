@@ -11,11 +11,19 @@ TaskHandle_t        W5500CommCtl_TaskHandler;
 GenericDeque_t  *   TxDeque;
 GenericDeque_t  *   RxDeque;
 
-#define SOCKET_1_UDP_PORT SOMEIP_PORT_HEX
+volatile SafeFlag_t      EthCommand;
+
+Eth_ResponseFunction_t Eth_ResponseFunction  = NULL;
+
+#define SOCKET_1_UDP_PORT DEFAULT_PORT_HEX
+
+/* PRIVATE STATE **********************************************************************************************************/
+static ReturnCode_t Eth_LastTxStatus = STAT_OKE;
+static volatile int32_t Eth_InitStatus = 1; /* 1 = Not Started */
 
 /* INTERNAL TASK **********************************************************************************************************/
 
-static EthRxCallback_t Eth_RxCallback = NULL;
+static Eth_RxCallback_t Eth_RxCallback = NULL;
 
 /*
  * @brief Log the Ethernet frame details and hex dump (8 bytes per row)
@@ -24,12 +32,12 @@ static EthRxCallback_t Eth_RxCallback = NULL;
  * @param SrcMAC Pointer to the 6-byte source MAC address (can be NULL)
  * @param DstMAC Pointer to the 6-byte destination MAC address (can be NULL)
  */
-void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, GenericPtr_t DstMAC) {
-    SysLog("W5500_LogFrame");
+void Eth_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, GenericPtr_t DstMAC) {
+    SysLog("Eth_LogFrame");
 
     Byte_t* pData = Data.UInt8;
     
-    SysLog("W5500_LogFrame(...) : Ethernet Frame Log | Size: %u bytes", Size);
+    SysLog("Eth_LogFrame(...) : Ethernet Frame Log | Size: %u bytes", Size);
 
     /* Check if destination MAC address is provided */
     if (DstMAC.Byte != NULL) {
@@ -43,8 +51,11 @@ void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, Gene
         SysLog("Src MAC: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     }
 
+    /* Limit printing to the first 32 bytes to prevent Task Watchdog timeout and system delay */
+    Word_t PrintSize = (Size > 128) ? 128 : Size;
+
     /* Iterate through the payload in 8-byte chunks */
-    for (Word_t i = 0; i < Size; i += 8) {
+    for (Word_t i = 0; i < PrintSize; i += 8) {
         char line_buf[128];
         int32_t pos = 0;
         pos += sprintf(line_buf + pos, "%04X: ", i);
@@ -52,7 +63,7 @@ void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, Gene
         /* Process hex data */
         for (int32_t j = 0; j < 8; j++) {
             /* Check if within payload bounds */
-            if ((i + j) < Size) {
+            if ((i + j) < PrintSize) {
                 pos += sprintf(line_buf + pos, "%02X", pData[i + j]);
             } else {
                 pos += sprintf(line_buf + pos, "  ");
@@ -67,7 +78,7 @@ void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, Gene
         pos += sprintf(line_buf + pos, " | ");
 
         /* Process ASCII data representation */
-        for (int32_t j = 0; j < 8 && (i + j) < Size; j++) {
+        for (int32_t j = 0; j < 8 && (i + j) < PrintSize; j++) {
             Byte_t byte = pData[i + j];
             
             /* Check if byte is a printable ASCII character */
@@ -84,21 +95,21 @@ void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, Gene
         }
         SysLog("%s", line_buf);
     }
-    SysExit("W5500_LogFrame");
+    SysExit("Eth_LogFrame");
 }
 
 /*
  * @brief Log network information extracted from the received packet
  * @param pkt Pointer to the packet slot in RxPool
  */
-void W5500_LogUDPInfo(PacketSlot_t* pkt) {
+void Eth_LogUDPInfo(PacketSlot_t* pkt) {
     /* Validate packet pointer */
     if (pkt == NULL) {
         /* Abort if packet is null */
         return;
     }
     
-    SysLog("W5500_LogUDPInfo(...) : Network Info Extracted");
+    SysLog("Eth_LogUDPInfo(...) : Network Info Extracted");
     SysLog("    |- Src IP   : %u.%u.%u.%u", 
             pkt->SrcIP.Byte[0], pkt->SrcIP.Byte[1], pkt->SrcIP.Byte[2], pkt->SrcIP.Byte[3]);
     SysLog("    |- Src Port : %u", pkt->SrcPort.Word);
@@ -116,8 +127,26 @@ static void W5500_TaskComm_SocketNSendUDP(PacketSlot_t* tx_pkt) {
     Word_t bsb_reg = eBSB_Socket1Register;
     Word_t bsb_tx_buf = eBSB_Socket1TxBuffer;
 
+    /* Check Link Status first */
+    if (Eth_GetLinkStatus() != STAT_OKE) {
+        SysLog("W5500_TaskComm_SocketNSendUDP(...): No LAN connection, packet dropped.");
+        Eth_LastTxStatus = STAT_ERR_IO;
+        return;
+    }
+
     SysLog("W5500_TaskComm_SocketNSendUDP(...): UDP Transmit %d bytes to %u.%u.%u.%u:%u", 
         tx_pkt->Size, tx_pkt->SrcIP.Byte[0], tx_pkt->SrcIP.Byte[1], tx_pkt->SrcIP.Byte[2], tx_pkt->SrcIP.Byte[3], tx_pkt->SrcPort.Word);
+
+    /* Wait until W5500 is ready to accept a new command (prevents overwriting eSn_CR) */
+    while (W5500_ReadByteReg(Eth, bsb_reg, eSn_CR) != 0x00) {
+        taskYIELD();
+    }
+
+    /* Wait for sufficient free size in TX buffer to avoid pointer override */
+    Word_t free_size = 0;
+    while ((free_size = (Word_t)W5500_ReadDoubleByteReg(Eth, bsb_reg, eSn_TX_FSR0)) < tx_pkt->Size) {
+        taskYIELD();
+    }
 
     W5500_WriteNByteReg(Eth, bsb_reg, eSn_DIPR0, tx_pkt->SrcIP.Byte, 4);
     W5500_WriteDoubleByteReg(Eth, bsb_reg, eSn_DPORT0, tx_pkt->SrcPort.Word);
@@ -126,7 +155,48 @@ static void W5500_TaskComm_SocketNSendUDP(PacketSlot_t* tx_pkt) {
     W5500_WriteNByteReg(Eth, bsb_tx_buf, tx_wr, tx_pkt->Data, tx_pkt->Size);
     W5500_WriteDoubleByteReg(Eth, bsb_reg, eSn_TX_WR0, tx_wr + tx_pkt->Size);
 
+    /* Clear previous SEND_OK and TIMEOUT flags before issuing SEND command */
+    W5500_WriteByteReg(Eth, bsb_reg, eSn_IR, 0x18);
+
     W5500_WriteByteReg(Eth, bsb_reg, eSn_CR, 0x20);
+
+    /* Wait for the SEND command to complete (SEND_OK or TIMEOUT) */
+    Byte_t Sn_IR = 0;
+    uint32_t wait_ticks = 0;
+    Word_t expected_tx_rd = tx_wr + tx_pkt->Size;
+
+    while(1) {
+        Sn_IR = (Byte_t)W5500_ReadByteReg(Eth, bsb_reg, eSn_IR);
+        if (Sn_IR & 0x10) { /* SEND_OK */
+            W5500_WriteByteReg(Eth, bsb_reg, eSn_IR, 0x10);
+            
+            /* HARDWARE GLITCH CHECK: Verify if TX_RD actually caught up to TX_WR */
+            Word_t current_tx_rd = (Word_t)W5500_ReadDoubleByteReg(Eth, bsb_reg, eSn_TX_RD0);
+            if (current_tx_rd != expected_tx_rd) {
+                SysLog("W5500_TaskComm_SocketNSendUDP: SPI Glitch detected! TX_RD not updated. Re-issuing SEND.");
+                while (W5500_ReadByteReg(Eth, bsb_reg, eSn_CR) != 0x00) { taskYIELD(); }
+                W5500_WriteByteReg(Eth, bsb_reg, eSn_CR, 0x20);
+                wait_ticks = 0;
+                continue;
+            }
+            
+            Eth_LastTxStatus = STAT_OKE;
+            break;
+        }
+        if (Sn_IR & 0x08) { /* TIMEOUT */
+            W5500_WriteByteReg(Eth, bsb_reg, eSn_IR, 0x08);
+            SysLog("W5500_TaskComm_SocketNSendUDP(...): UDP Transmit TIMEOUT!");
+            Eth_LastTxStatus = STAT_ERR_TIMEOUT;
+            break;
+        }
+        
+        wait_ticks++;
+        if (wait_ticks > 100) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+        } else {
+            taskYIELD();
+        }
+    }
 }
 
 /*
@@ -450,6 +520,24 @@ ReturnCode_t Eth_SetUDPBufferSize(uint8_t TxSizeKB, uint8_t RxSizeKB) {
 }
 
 /*
+ * @brief Check the PHY Link Status to verify LAN connection.
+ * @return ReturnCode_t STAT_OKE if connected, STAT_ERR otherwise.
+ */
+ReturnCode_t Eth_GetLinkStatus(void) {
+    if (Eth == NULL) return STAT_ERR_INVALID_STATE;
+    Byte_t phy_cfg = (Byte_t)W5500_ReadByteReg(Eth, eBSB_CommonRegister, ePHYCFGR);
+    return (phy_cfg & 0x01) ? STAT_OKE : STAT_ERR;
+}
+
+/*
+ * @brief Get the status of the last transmission attempt.
+ * @return ReturnCode_t The last Tx status.
+ */
+ReturnCode_t Eth_GetLastTxStatus(void) {
+    return Eth_LastTxStatus;
+}
+
+/*
  * @brief Retrieve the highest priority packet from the receive queue.
  * @param pkt Pointer to store the packet slot address.
  * @return ReturnCode_t STAT_OKE if packet found.
@@ -545,9 +633,27 @@ ReturnCode_t Eth_GetUDPPayload(PacketSlot_t* pkt, uint8_t** payload, uint16_t* s
  * @param cb The callback function pointer.
  * @return ReturnCode_t STAT_OKE on success.
  */
-ReturnCode_t Eth_SetRxCallback(EthRxCallback_t cb) {
+ReturnCode_t Eth_SetRxCallback(Eth_RxCallback_t cb) {
     Eth_RxCallback = cb;
     /* Confirm callback registration */
+    return STAT_OKE;
+}
+
+/*
+ * @brief Register a callback function for received UDP packets.
+ * @param EthResponseFunction The callback function pointer.
+ * @return ReturnCode_t STAT_OKE on success, STAT_ERR_INVALID_ARG otherwise.
+ */
+ReturnCode_t Eth_SetResponseFunction(Eth_ResponseFunction_t EthResponseFunction){
+    /* Route execution to validate the provided function pointer */
+    if(IsNull(EthResponseFunction)){
+        /* Terminate function and yield error due to invalid argument */
+        return STAT_ERR_INVALID_ARG;
+    }
+    
+    Eth_ResponseFunction = EthResponseFunction;
+    
+    /* Terminate function and yield OK status */
     return STAT_OKE;
 }
 
@@ -592,8 +698,8 @@ __attribute__((weak)) void Eth_WeakRxCallback(PacketSlot_t* pkt) {
     }
     SysLog("Eth_WeakRxCallback(...):  Process packet, Size=%d, Prio ID=0x%02X", pkt->Size, pkt->Data[0]);
     
-    W5500_LogUDPInfo(pkt);
-    W5500_LogFrame((GenericPtr_t)pkt->Data, pkt->Size, GenericNullPtr, GenericNullPtr);
+    Eth_LogUDPInfo(pkt);
+    Eth_LogFrame((GenericPtr_t)pkt->Data, pkt->Size, GenericNullPtr, GenericNullPtr);
     TxPacket_Push(pkt->Size, (GenericPtr_t)pkt->Data, pkt->SrcIP.Byte, pkt->SrcPort.Word, pkt->SrcMAC.Byte);
     
     /* Verify communication task readiness before notification */
@@ -602,14 +708,37 @@ __attribute__((weak)) void Eth_WeakRxCallback(PacketSlot_t* pkt) {
     }
 }
 
-/* INTERNAL TASK **********************************************************************************************************/
+/*
+ * @brief Set the 2nd-callback function (for trigger heart-beat to make the response immediately)
+ */
+ReturnCode_t Eth_RequestResponseNow(){
+    /* Called while processing a locked packet (SLOT_READING). Checking
+       RxedPacket_Size() here will report 0 and prevent the response flag
+       from being set. Always set the response flag when requested so that
+       W5500CommCtl() can call the registered response function. */
+    SafeFlagSet(&EthCommand, eEthResponseNow);
+    return STAT_OKE;
+}
+
+/* INTERNAL TASK *Eth_RequestResponseNow*********************************************************************************************************/
+
+/*
+ * @brief Get the initialization status of the module
+ * @return 0 = OK, 1 = Not Started, 2 = Initializing
+ */
+ReturnCode_t Eth_InitializeStatus(void) {
+    return Eth_InitStatus;
+}
 
 /*
  * @brief  Serivce handle W5500 module
  * @param arg Ignored
  */
-void W5500CommRuntime(void* arg){
+void Eth_Runtime(void* arg){
+    Eth_InitStatus = 2; /* 2 = Initializing */
     SysEntry("W5500CommCtl");
+
+    while(1 >= GlobalInit_GetLevel()){vTaskDelay(pdMS_TO_TICKS(50));}
     
     ReturnCode_t RetVal;
     
@@ -621,6 +750,7 @@ void W5500CommRuntime(void* arg){
     /* Ensure the Ethernet hardware object was constructed */
     if (IsNull(Eth)) {
         SysErr("W5500CommCtl(...) : Cannot initialize `Eth`!");
+        Eth_InitStatus = 1; /* Reset state on failure */
         /* Branch to cleanup on fatal error */
         goto CLEANUP_AND_EXIT;
     }
@@ -630,6 +760,7 @@ void W5500CommRuntime(void* arg){
     /* Validate hardware initialization status */
     if(RetVal != STAT_OKE){
         SysErr("W5500CommCtl(...): Cannot initialize module W5500! ErrorCode=%d", RetVal);
+        Eth_InitStatus = 1; /* Reset state on failure */
         /* Branch to cleanup if setup failed */
         goto CLEANUP_AND_EXIT;
     }
@@ -645,8 +776,12 @@ void W5500CommRuntime(void* arg){
         &W5500_TaskComm_TaskHandler
     );
     
+    Eth_InitStatus = 0; /* 0 = Initialization OK & Completed */
+    
     SysLog("W5500CommCtl(...) : Join forever loop...");
     
+    GlobalInit_MoveNextLevel();
+
     /* Run the main network management routine indefinitely */
     while (1) {
         SysLog("W5500CommCtl(...) : W5500 version=%X", W5500_GetModuleVersion(Eth));
@@ -658,6 +793,9 @@ void W5500CommRuntime(void* arg){
         
         /* Drain all available packets from the receive queue */
         while((pkt = RxedPacket_GetHighestPriority()) != NULL){
+            SafeFlagSet(&EthCommand, eEthDiscardPacket);
+            SafeFlagClear(&EthCommand, eEthResponseNow);
+
             /* Route to custom callback if registered */
             if (Eth_RxCallback != NULL) {
                 Eth_RxCallback(pkt);
@@ -666,8 +804,14 @@ void W5500CommRuntime(void* arg){
                 Eth_WeakRxCallback(pkt);
             }
             
-            RxedPacket_Release(pkt);
-            SysLog("");
+            if( IsNotNull(Eth_ResponseFunction) && SafeFlagHas(&EthCommand, eEthResponseNow)){
+                Eth_ResponseFunction(pkt);
+            }
+            if(SafeFlagHas(&EthCommand, eEthDiscardPacket)){
+                RxedPacket_Release(pkt);
+                SysLog("");
+            }
+
         }
 
         SysLog("");

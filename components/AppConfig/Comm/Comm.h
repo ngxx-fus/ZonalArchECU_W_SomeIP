@@ -23,27 +23,40 @@ typedef uint64_t Qword_t;
 /// GENERATED SECTION | BEGIN /////////////////////////////////////////////////
 #define GW_IP_ADDR_STR "10.0.0.1"
 #define GW_IP_ADDR_HEX 0x0100000A
-#define SRC_MAC_ADDR_STR "58:32:01:DC:08:00"
-#define SRC_MAC_ADDR_HEX 0x583201DC0800
+#define GW_IP_ADDR_INITIALIZER {10, 0, 0, 1}
+extern const Byte_t GW_IP_ADDR[];
+
 #define SUBNET_MASK_STR "255.255.255.0"
 #define SUBNET_MASK_HEX 0x00FFFFFF
-#define SRC_IP_ADDR_STR "10.0.0.58"
-#define SRC_IP_ADDR_HEX 0x3A00000A
-#define SOMEIP_PORT_STR "51786"
-#define SOMEIP_PORT_VAL 51786
-#define SOMEIP_PORT_HEX 0xCA4A
+#define SUBNET_MASK_INITIALIZER {255, 255, 255, 0}
+extern const Byte_t SUBNET_MASK[];
+
 #define CCU_IPV4_ADDR_STR "10.0.0.102"
 #define CCU_IPV4_ADDR_HEX 0x6600000A
+#define CCU_IPV4_ADDR_INITIALIZER {10, 0, 0, 102}
+extern const Byte_t CCU_IPV4_ADDR[];
+
 #define CCU_IPV4_PORT_STR "30490"
 #define CCU_IPV4_PORT_VAL 30490
 #define CCU_IPV4_PORT_HEX 0x771A
-extern const Byte_t GW_IP_ADDR[];
-extern const Byte_t SRC_MAC_ADDR[];
-extern const Byte_t SUBNET_MASK[];
-extern const Byte_t SRC_IP_ADDR[];
-extern const Word_t SOMEIP_PORT;
-extern const Byte_t CCU_IPV4_ADDR[];
 extern const Word_t CCU_IPV4_PORT;
+
+#define ECU_NAME_STR "Front-ZECU"
+
+#define SRC_IP_ADDR_STR "10.0.0.58"
+#define SRC_IP_ADDR_HEX 0x3A00000A
+#define SRC_IP_ADDR_INITIALIZER {10, 0, 0, 58}
+extern const Byte_t SRC_IP_ADDR[];
+
+#define DEFAULT_PORT_STR "51786"
+#define DEFAULT_PORT_VAL 51786
+#define DEFAULT_PORT_HEX 0xCA4A
+extern const Word_t DEFAULT_PORT;
+
+#define SRC_MAC_ADDR_STR "3c:8a:1f:a2:c7:24"
+#define SRC_MAC_ADDR_HEX 0x3C8A1FA2C724
+#define SRC_MAC_ADDR_INITIALIZER {0x3c, 0x8a, 0x1f, 0xa2, 0xc7, 0x24}
+extern const Byte_t SRC_MAC_ADDR[];
 
 /// GENERATED SECTION | END   /////////////////////////////////////////////////
 

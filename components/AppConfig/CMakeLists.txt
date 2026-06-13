@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.31)
 
 # --- Path Definitions ---
-set(PINOUT_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/Pinout.h")
+set(PINOUT_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/Pinout/Pinout.h")
 set(PINOUT_DEF    "${CMAKE_CURRENT_SOURCE_DIR}/Pinout/Pinout.h.def")
-set(PINOUT_CNF    "${CMAKE_CURRENT_SOURCE_DIR}/Pinout/Pinout.cnf")
 
-set(COMM_HEADER   "${CMAKE_CURRENT_SOURCE_DIR}/Comm.h")
+set(COMM_HEADER   "${CMAKE_CURRENT_SOURCE_DIR}/Comm/Comm.h")
 set(COMM_SOURCE   "${CMAKE_CURRENT_SOURCE_DIR}/Comm/Comm.c")
 set(COMM_DEF_H    "${CMAKE_CURRENT_SOURCE_DIR}/Comm/Comm.h.def")
 set(COMM_DEF_C    "${CMAKE_CURRENT_SOURCE_DIR}/Comm/Comm.c.def")
-set(COMM_CNF      "${CMAKE_CURRENT_SOURCE_DIR}/Comm/Comm.cnf")
+set(SYSTEM_CONFIG_YAML "${CMAKE_CURRENT_SOURCE_DIR}/SystemConfig.yml")
+set(CONFIG_GENERATOR   "${CMAKE_CURRENT_SOURCE_DIR}/generate_config.py")
 
 # --- Auto-Scanning Sources and Includes ---
 
@@ -50,21 +50,12 @@ idf_component_register(
 
 # --- Custom Commands & Dependencies ---
 
-# Command for Pinout.h
+# Command for generating configurations via Python
 add_custom_command(
-    OUTPUT  "${PINOUT_HEADER}"
-    COMMAND make -C "${CMAKE_CURRENT_SOURCE_DIR}/Pinout" all
-    DEPENDS "${PINOUT_DEF}" "${PINOUT_CNF}"
-    COMMENT "Generating Pinout.h from Pinout.cnf..."
-    VERBATIM
-)
-
-# Command for Comm.h and Comm.c 
-add_custom_command(
-    OUTPUT  "${COMM_HEADER}" "${COMM_SOURCE}"
-    COMMAND make -C "${CMAKE_CURRENT_SOURCE_DIR}/Comm" all
-    DEPENDS "${COMM_DEF_H}" "${COMM_DEF_C}" "${COMM_CNF}"
-    COMMENT "Generating Comm files from Comm.cnf..."
+    OUTPUT  "${PINOUT_HEADER}" "${COMM_HEADER}" "${COMM_SOURCE}"
+    COMMAND python3 ${CONFIG_GENERATOR} ${SYSTEM_CONFIG_YAML}
+    DEPENDS "${PINOUT_DEF}" "${COMM_DEF_H}" "${COMM_DEF_C}" "${SYSTEM_CONFIG_YAML}" "${CONFIG_GENERATOR}"
+    COMMENT "Generating Config files from SystemConfig.yml using Python..."
     VERBATIM
 )
 
