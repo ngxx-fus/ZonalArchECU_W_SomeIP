@@ -33,8 +33,8 @@ def send_custom_ether_frames(dst_mac, iface):
 
         payload_bytes = (pattern * (32 // len(pattern) + 1))[:1024]
 
-        # Tạo Ethernet Frame (Layer 2). 
-        # type=0x88B5 là EtherType dành cho mục đích thí nghiệm (Local Experimental)
+        # Create Ethernet Frame (Layer 2). 
+        # type=0x88B5 is EtherType for Local Experimental purposes
         packet = Ether(dst=dst_mac, type=0x88B5) / Raw(load=bytes(payload_bytes))
 
         try:
@@ -43,7 +43,7 @@ def send_custom_ether_frames(dst_mac, iface):
             sendp(packet, iface=iface, verbose=False)
             log(f"Sent frame to {dst_mac} | Payload: ...{counter:02X}")
             
-            # Tăng counter và quay vòng từ 0x00 -> 0xFF
+            # Increment counter and wrap around from 0x00 to 0xFF
             counter = (counter + 1) % 256
             
         except Exception as e:

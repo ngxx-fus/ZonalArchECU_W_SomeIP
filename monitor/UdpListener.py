@@ -61,7 +61,7 @@ class UdpListenerThread(QThread):
                 magic0, ver, magic1, magic2, label_bytes, mac_bytes, m3, ip_bytes, port, m4, m5, m6, frame_type = struct.unpack("<BBBB64s6sB4sHBBBI", header_bytes)
                 
                 # /* Security check: Verify ZECU Frame integrity */
-                if magic0 != 0xAA or ver != 0x04:
+                if magic0 != 0xAA or ver != 0x04 or magic1 != 0xAA or magic2 != 0xAA:
                     continue
                     
                 # /* Extract textual identification and format MAC */

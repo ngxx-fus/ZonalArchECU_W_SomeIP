@@ -65,31 +65,31 @@ def analyze_timings(packets):
             waiting_for_response = True
             last_ccu_time = pkt['time']
             
-            # Cắt chuỗi tính Cycle Time tại đây vì CCU đã ngắt ngang
+            # Break the cycle time calculation chain here because CCU interrupted
             has_reference_for_cycle = False 
             
         # Route execution for ZoneECU sending a packet
         elif pkt['src'] == ZONE_ECU_IP:
             if waiting_for_response:
-                # Type 2: Gói phản hồi ngay sau lệnh CCU
+                # Type 2: Immediate response packet after CCU command
                 diff_ms = (pkt['time'] - last_ccu_time) * 1000.0
                 response_times_ms.append(diff_ms)
                 
-                # Đã phản hồi xong, reset cờ chờ
+                # Response completed, reset wait flag
                 waiting_for_response = False
                 
-                # Gói phản hồi này là dị biệt, tuyệt đối KHÔNG làm mốc cho cycle time
+                # This response packet is an anomaly, absolutely DO NOT use as cycle time reference
                 has_reference_for_cycle = False
                 
             else:
                 # Type 1: Normal Heartbeat
                 if has_reference_for_cycle:
-                    # Có mốc hợp lệ từ Normal Heartbeat liền trước -> Tính chu kỳ
+                    # Have valid reference from previous Normal Heartbeat -> Calculate cycle
                     diff_ms = (pkt['time'] - reference_time) * 1000.0
                     cycle_times_ms.append(diff_ms)
                     
-                # Gói Normal Heartbeat hiện tại sẽ trở thành mốc cho gói Normal tiếp theo
-                # (Lưu ý: Nếu đây là gói đầu tiên sau khi bị ngắt, nó chỉ set reference mà không tính diff)
+                # The current Normal Heartbeat packet becomes the reference for the next Normal one
+                # (Note: If this is the first packet after an interruption, it only sets reference without calculating diff)
                 reference_time = pkt['time']
                 has_reference_for_cycle = True
                 

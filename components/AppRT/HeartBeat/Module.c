@@ -7,6 +7,9 @@
 #include "nvs.h"
 #include "driver/gpio.h"
 
+/* Macro to disable Keep-Alive tracking for testing purposes */
+#define DISABLE_KEEPALIVE_TRACK
+
 /* Control flow: Define Heartbeat State Machine Steps */
 enum App_HeartBeat_State_e {
     eSTATE_BROADCAST        = 0x00, ///< Node is broadcasting its presence
@@ -116,11 +119,6 @@ void ParsePacket(PacketSlot_t* pkt){
         return;
     }
     ZECUFrame_Generic_t * Fr = (ZECUFrame_Generic_t*)pkt->Data;
-    
-    if(Fr->Header.FrameType != eFrameType_KeepAlive){
-        /* 3. Log raw frame data (Hex and ASCII dump) */
-        Eth_LogFrame((GenericPtr_t)pkt->Data, pkt->Size, GenericNullPtr, GenericNullPtr);
-    }
 
     /* 1. Ensure the Frame has valid Checksum/CRC before acting on commands */
     if(App_VerifyPacket(Fr) != STAT_OKE) {
@@ -133,6 +131,7 @@ void ParsePacket(PacketSlot_t* pkt){
            Fr->Header.Info.IPv4Address[0], Fr->Header.Info.IPv4Address[1], 
            Fr->Header.Info.IPv4Address[2], Fr->Header.Info.IPv4Address[3]);
     SysLog("ParsePacket(...): Port: %d", Fr->Header.Info.IPv4Port);
+    SysLog("ParsePacket(...): FrameType: %X", Fr->Header.FrameType);
     
     /* 2. Process Pairing Requests (Monitor sent ePairingRequest_New) */
     if (Fr->Header.FrameType == eFrameType_PairingRequest) {
@@ -154,8 +153,10 @@ void ParsePacket(PacketSlot_t* pkt){
     }
     /* 3. Process Keep-Alive frames to feed the watchdog */
     else if (Fr->Header.FrameType == eFrameType_KeepAlive) {
-        /* Feed the CCU Keep-Alive Watchdog */
-        last_keepalive_time = xTaskGetTickCount();
+        #ifndef DISABLE_KEEPALIVE_TRACK
+            /* Feed the CCU Keep-Alive Watchdog */
+            last_keepalive_time = xTaskGetTickCount();
+        #endif
         return; /* Skip further logging for Keep-Alive to prevent UART spam */
     }
     /* 3. Process Authentication Response (Monitor signed the challenge) */
@@ -178,6 +179,25 @@ void ParsePacket(PacketSlot_t* pkt){
             App_HeartBeat_State = eSTATE_BROADCAST;
         }
     }
+    else if(Fr->Header.FrameType == eFrameType_EngineControl1){
+        SysLog("ParsePacket(...): Speed0=%d", Fr->Body.EngineControl3.M0);
+        MotorSetSpeed0(Fr->Body.EngineControl1.M0);
+        Eth_RequestResponseNow();
+    }
+    else if(Fr->Header.FrameType == eFrameType_EngineControl2){
+        SysLog("ParsePacket(...): Speed1=%d", Fr->Body.EngineControl3.M1);
+        MotorSetSpeed1(Fr->Body.EngineControl2.M1);
+        Eth_RequestResponseNow();
+    }
+    else if(Fr->Header.FrameType == eFrameType_EngineControl3){
+        SysLog("ParsePacket(...): Speed0=%d, Speed1=%d", Fr->Body.EngineControl3.M0, Fr->Body.EngineControl3.M1);
+        MotorSetSpeed0(Fr->Body.EngineControl3.M0);
+        MotorSetSpeed1(Fr->Body.EngineControl3.M1);
+        Eth_RequestResponseNow();
+    }
+    else if(Fr->Header.FrameType == eFrameType_EmergencyStop){
+        EmergencyStop();
+    }
 }
 
 /*
@@ -194,7 +214,10 @@ void App_EthernetRxCallback(PacketSlot_t* pkt) {
     SysLog("App_EthernetRxCallback(...): Received packet");
     Eth_LogUDPInfo(pkt);
 
-    /* 3. Parse the received packet using the updated ZECU Frame protocol */
+    /* 3. Log raw frame data (Hex and ASCII dump) */
+    Eth_LogFrame((GenericPtr_t)pkt->Data, pkt->Size, GenericNullPtr, GenericNullPtr);
+
+    /* 4. Parse the received packet using the updated ZECU Frame protocol */
     ParsePacket(pkt);
 }
 
@@ -392,11 +415,13 @@ void HeartBeatRuntime(void* arg) {
 
         /* --- CCU KEEPALIVE TIMEOUT WATCHDOG --- */
         if (App_HeartBeat_State == eSTATE_CONNECTED) {
+#ifndef DISABLE_KEEPALIVE_TRACK
             if ((xTaskGetTickCount() - last_keepalive_time) > pdMS_TO_TICKS(CCU_KEEPALIVE_TIMEOUT_MS)) {
                 SysErr("HeartBeatRuntime: CCU Keep-Alive Timeout (> %d ms)! Reverting to Broadcast.", CCU_KEEPALIVE_TIMEOUT_MS);
                 App_HeartBeat_State = eSTATE_BROADCAST;
                 continue;
             }
+#endif
         }
         
         /* Do not dispatch telemetry if not fully connected */

@@ -8,9 +8,8 @@ import signal
 import struct
 from datetime import datetime
 from PySide6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QTextEdit, 
-                               QDialog, QTreeView, QMenu)
+                               QDialog, QTreeView, QMenu, QTreeWidgetItem)
 from PySide6.QtCore import Qt, QTimer, QUrl
-from PySide6.QtGui import QStandardItemModel, QStandardItem
 from collections import deque
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
@@ -20,7 +19,7 @@ from MonitorConfig import *
 
 # /* Import external components */
 from monitor_ui import Ui_MainWindow
-from monitor_connect_zecu import Ui_ConnectZECU
+from monitor_list_zecu import Ui_Dialog as Ui_ListZECU
 from monitor_auth import NodeAuth
 from CoreNetwork import ZoneECU, CCUCommandBuilder
 from UdpListener import UdpListenerThread
@@ -34,8 +33,11 @@ GLOBAL_LON = 106.660172
 MAX_GSP_MAP_REFRESH_TIME_SEC = 3
 
 # /* Constants for Custom Keep-Alive Protocol */
-KEEPALIVE_MAGIC = 0x55
+KEEPALIVE_MAGIC = 0xAA
 KEEPALIVE_FRAME_TYPE = 0x5500AA00
+
+# /* Flag to disable Keep-Alive tracking for testing purposes */
+DISABLE_KEEPALIVE_TRACK = True
 
 # /* ========================================================================= */
 # /* ZECU DISCOVERY DIALOG                                                     */
@@ -44,22 +46,25 @@ KEEPALIVE_FRAME_TYPE = 0x5500AA00
 class DiscoveryDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.ui = Ui_ConnectZECU()
+        
+        # /* Explicitly save a Python reference to the parent App to avoid QWidget wrapper issues */
+        self.main_app = parent
+        self.ui = Ui_ListZECU()
         self.ui.setupUi(self)
         self.setWindowTitle("Discovered ZECUs (Broadcast Scan)")
         
-        self.tree = self.ui.TreeView_ListECU
-        
-        self.model = QStandardItemModel()
-        self.model.setHorizontalHeaderLabels(["Name / Service", "Details"])
-        self.tree.setModel(self.model)
+        self.tree = self.ui.treeWidget
+        self.tree.setColumnCount(2)
+        self.tree.setHeaderLabels(["Name / Service", "Details"])
         
         self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
         self.tree.customContextMenuRequested.connect(self.on_context_menu)
         
+        self.ui.pushButton_RemoteZECU.clicked.connect(self.on_remove_zecu_clicked)
+        
         self.discovered_ecus = {}
         
-        # Tạo Socket độc lập để bắt gói Broadcast
+        # /* Create independent socket to capture Broadcast packets */
         self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
             self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -72,7 +77,7 @@ class DiscoveryDialog(QDialog):
             
         self.udp_sock.setblocking(False)
         
-        # Quét gói tin mỗi 100ms
+        # /* Scan packets every 100ms */
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.poll_udp)
         self.timer.start(100)
@@ -90,7 +95,7 @@ class DiscoveryDialog(QDialog):
                 print(f"[Discovery] Socket error: {e}")
             
     def parse_broadcast(self, data, ip):
-        # Kiểm tra kích thước tối thiểu (88 byte Header + 8 byte BodyHeader)
+        # /* Check minimum size (88 bytes Header + 8 bytes BodyHeader) */
         if len(data) < 96: 
             print(f"[-] Dropped: Packet too small ({len(data)} < 96)")
             return
@@ -103,35 +108,34 @@ class DiscoveryDialog(QDialog):
             return
             
         if magic0 != 0xAA or ver != 0x04 or magic1 != 0xAA or magic2 != 0xAA: 
-            print(f"[-] Dropped: Magic/Version mismatch ({magic0:02X} {ver:02X})")
+            print(f"[-] Dropped: Magic/Version mismatch ({magic0:02X} {ver:02X} {magic1:02X} {magic2:02X})")
             return
             
-        # Đảm bảo chỉ xử lý các gói Broadcast (0xFFFFFFFF)
+        # /* Ensure only Broadcast packets (0xFFFFFFFF) are processed */
         if frame_type != 0xFFFFFFFF:
             return
         
         label = label_bytes.split(b'\x00')[0].decode('utf-8', 'ignore')
         if ip in self.discovered_ecus: return 
             
-        # Unpack ZECUFrame_Body_Broadcast_t Header (8 bytes) bắt đầu từ offset 88
+        # /* Unpack ZECUFrame_Body_Broadcast_t Header (8 bytes) starting from offset 88 */
         magicDword, svc_count, pad = struct.unpack_from("<IB3s", data, 88)
         
-        ecu_item = QStandardItem(f"ZECU: {label}")
-        ecu_item.setData({"ip": ip, "name": label, "port": port}, Qt.UserRole)
+        ecu_item = QTreeWidgetItem(self.tree)
+        ecu_item.setText(0, f"ZECU: {label}")
+        ecu_item.setText(1, f"IPv4: {ip}:{port} | {svc_count} Services Active")
+        ecu_item.setData(0, Qt.UserRole, {"ip": ip, "name": label, "port": port})
         
-        details_item = QStandardItem(f"IPv4: {ip}:{port} | {svc_count} Services Active")
-        self.model.appendRow([ecu_item, details_item])
-        
-        # Parse Services (mỗi service 64 bytes)
+        # /* Parse Services (each service is 64 bytes) */
         offset = 96
         for _ in range(svc_count):
             if offset + 64 > len(data): break
             svc_id, svc_type, svc_acc, svc_desc_bytes = struct.unpack_from("<HHB59s", data, offset)
             svc_desc = svc_desc_bytes.split(b'\x00')[0].decode('utf-8', 'ignore')
             
-            s_item = QStandardItem(f"Service: {svc_desc}")
-            s_details = QStandardItem(f"ID: 0x{svc_id:04X} | Type: 0x{svc_type:04X}")
-            ecu_item.appendRow([s_item, s_details])
+            s_item = QTreeWidgetItem(ecu_item)
+            s_item.setText(0, f"Service: {svc_desc}")
+            s_item.setText(1, f"ID: 0x{svc_id:04X} | Type: 0x{svc_type:04X}")
             offset += 64
             
         self.discovered_ecus[ip] = ecu_item
@@ -139,25 +143,42 @@ class DiscoveryDialog(QDialog):
         self.tree.resizeColumnToContents(0)
         
     def on_context_menu(self, pos):
-        index = self.tree.indexAt(pos)
-        if not index.isValid(): return
+        item = self.tree.itemAt(pos)
+        if not item: return
         
-        # Luôn lấy Item ở cột 0 của dòng được click để trích xuất dữ liệu an toàn
-        col0_index = index.siblingAtColumn(0)
-        item = self.model.itemFromIndex(col0_index)
-        
-        # Chỉ hiện Context Menu nếu click vào dòng ECU gốc (không phải click vào Service)
+        # /* Only show Context Menu if clicked on the root ECU row (not on Service) */
         if item.parent() is None:
-            data = item.data(Qt.UserRole)
+            data = item.data(0, Qt.UserRole)
             if data is not None:
                 menu = QMenu(self)
                 connect_action = menu.addAction(f"Connect to {data['name']}")
                 action = menu.exec(self.tree.viewport().mapToGlobal(pos))
                 
                 if action == connect_action:
-                    if self.parent():
-                        self.parent().connect_to_ecu(data["ip"], data["name"], data["port"])
+                    if self.main_app:
+                        self.main_app.connect_to_ecu(data["ip"], data["name"], data["port"])
                     self.accept()
+                    
+    def on_remove_zecu_clicked(self):
+        items = self.tree.selectedItems()
+        if not items: return
+        
+        item = items[0]
+        # /* Check if it's the root ECU node */
+        if item.parent() is None:
+            data = item.data(0, Qt.UserRole)
+            if data is not None:
+                ecu_name = data["name"]
+                ip = data["ip"]
+                # /* Call main app to remove */
+                if self.main_app:
+                    self.main_app.remove_ecu(ecu_name)
+                # /* Remove from UI */
+                root = self.tree.invisibleRootItem()
+                root.removeChild(item)
+                # /* Remove from local discovered_ecus dictionary */
+                if ip in self.discovered_ecus:
+                    del self.discovered_ecus[ip]
                     
     def cleanup(self):
         if self.timer.isActive():
@@ -198,7 +219,7 @@ class MyMonitorApp(QMainWindow):
         
         # /* Core Registries */
         self.authenticator = NodeAuth()
-        # Khởi tạo khóa cứng giống với ZECU (0xDEADBEEF)
+        # /* Initialize hardcoded key matching ZECU (0xDEADBEEF) */
         self.authenticator.set_core_key(0xDEADBEEF) 
         
         self.ecu_registry = {}
@@ -249,9 +270,10 @@ class MyMonitorApp(QMainWindow):
         self.gps_timer.start(1000)
         
         # /* Set up a 300ms Keep-Alive timer to prevent ZECU timeout */
-        self.keep_alive_timer = QTimer(self)
-        self.keep_alive_timer.timeout.connect(self.send_keep_alive)
-        self.keep_alive_timer.start(300)
+        if not DISABLE_KEEPALIVE_TRACK:
+            self.keep_alive_timer = QTimer(self)
+            self.keep_alive_timer.timeout.connect(self.send_keep_alive)
+            self.keep_alive_timer.start(300)
 
         self.udp_thread = UdpListenerThread()
         self.udp_thread.data_received.connect(self.process_incoming_data)
@@ -327,11 +349,8 @@ class MyMonitorApp(QMainWindow):
         self.ui.ConnectZECU.triggered.connect(self.open_discovery_dialog)
         self.ui.actionGPS_map.triggered.connect(self.show_gps_view)
         self.ui.actionECU_status_graph.triggered.connect(self.show_graph_view)
+        self.ui.actionZECU_List.triggered.connect(self.open_discovery_dialog)
         
-        # /* Bind the Remove ZECU button to its callback */
-        if hasattr(self.ui, 'pushButton_RemoteZECU'):
-            self.ui.pushButton_RemoteZECU.clicked.connect(self.on_remove_zecu_clicked)
-
         # /* Return from execution */
         return
 
@@ -415,30 +434,6 @@ class MyMonitorApp(QMainWindow):
             self.canvas.draw()
         except Exception:
             pass
-
-    # /*
-    #  * @brief Callback invoked when the Remove ZECU button is pressed.
-    #  */
-    def on_remove_zecu_clicked(self):
-        if not hasattr(self.ui, 'ZECU_List'): return
-        
-        removed_any = False
-        if hasattr(self.ui.ZECU_List, 'selectedItems'):
-            items = self.ui.ZECU_List.selectedItems()
-            for item in list(items):
-                ecu_name = item.text()
-                self.remove_ecu(ecu_name)
-                self.remove_ecu_from_ui_list(ecu_name)
-                removed_any = True
-        elif hasattr(self.ui.ZECU_List, 'currentText'):
-            ecu_name = self.ui.ZECU_List.currentText()
-            if ecu_name:
-                self.remove_ecu(ecu_name)
-                self.remove_ecu_from_ui_list(ecu_name)
-                removed_any = True
-                
-        if not removed_any:
-            self.app_log("WARNING: No ZECU selected to remove.")
         
     # /*
     #  * @brief Initiates logic to authenticate and connect to an ECU
@@ -502,7 +497,7 @@ class MyMonitorApp(QMainWindow):
         
         # Header (88 bytes strictly aligned)
         header = struct.pack("<BBBB64s6sB4sHBBBI",
-            0xAA, 0x04, 0x55, 0xAA,
+            0xAA, 0x04, 0xAA, 0xAA,
             b"CentralControlUnit",
             bytes.fromhex("e466e5984fd7"),
             0xAA, socket.inet_aton("10.0.0.102"), 30490,
@@ -514,7 +509,7 @@ class MyMonitorApp(QMainWindow):
         csum = self.calc_checksum16(payload)
         crc = self.calc_crc32(payload) ^ 0xFFFFFFFF
         
-        trailer = struct.pack("<BHBI", 0xAA, csum, 0x55, crc)
+        trailer = struct.pack("<BHBI", 0xAA, csum, 0xAA, crc)
         return payload + trailer
         
     # /*
@@ -704,6 +699,9 @@ class MyMonitorApp(QMainWindow):
     #  * Evaluates a rolling sync counter (0 to 3) with the predefined Magic Number.
     #  */
     def send_keep_alive(self):
+        if DISABLE_KEEPALIVE_TRACK:
+            return
+            
         body = struct.pack("<BBBB", KEEPALIVE_MAGIC, self.keepalive_sync, KEEPALIVE_MAGIC, KEEPALIVE_MAGIC)
         payload = self.build_zecu_frame(KEEPALIVE_FRAME_TYPE, body)
         
@@ -1044,36 +1042,23 @@ class MyMonitorApp(QMainWindow):
     #  */
     def on_vis_speed_set(self):
         val = self.ui.Visualization_EngineSpeedSpinBox.value()
-        update_front = False
-        update_back = False
-
-        # /* Check if Front Left engine is selected */
-        if self.vis_selected["FrontLeft"]:
-            self.motor_states["Front"]["L"] = val
-            update_front = True
-            
-        # /* Check if Front Right engine is selected */
-        if self.vis_selected["FrontRight"]:
-            self.motor_states["Front"]["R"] = val
-            update_front = True
+        
+        update_fl = self.vis_selected["FrontLeft"]
+        update_fr = self.vis_selected["FrontRight"]
+        update_bl = self.vis_selected["BackLeft"]
+        update_br = self.vis_selected["BackRight"]
 
         # /* Transmit data if any front engine was modified */
-        if update_front:
-            self._transmit_motor_update("Front")
-
-        # /* Check if Back Left engine is selected */
-        if self.vis_selected["BackLeft"]:
-            self.motor_states["Back"]["L"] = val
-            update_back = True
-            
-        # /* Check if Back Right engine is selected */
-        if self.vis_selected["BackRight"]:
-            self.motor_states["Back"]["R"] = val
-            update_back = True
+        if update_fl or update_fr:
+            if update_fl: self.motor_states["Front"]["L"] = val
+            if update_fr: self.motor_states["Front"]["R"] = val
+            self._transmit_motor_update("Front", update_l=update_fl, update_r=update_fr)
 
         # /* Transmit data if any back engine was modified */
-        if update_back:
-            self._transmit_motor_update("Back")
+        if update_bl or update_br:
+            if update_bl: self.motor_states["Back"]["L"] = val
+            if update_br: self.motor_states["Back"]["R"] = val
+            self._transmit_motor_update("Back", update_l=update_bl, update_r=update_br)
 
         self.app_log(f"VISUALIZATION: Speed updated to {val} for selected engines.")
         
@@ -1088,39 +1073,39 @@ class MyMonitorApp(QMainWindow):
         front_sel = self.ui.Control_EngineSelect_Front_2.currentText()
         back_sel = self.ui.Control_EngineSelect_Front.currentText()
 
-        update_front = False
+        update_fl, update_fr = False, False
         # /* Evaluate front combobox selection routing */
         if front_sel == "Front_LR":
             self.motor_states["Front"]["L"] = val
             self.motor_states["Front"]["R"] = val
-            update_front = True
+            update_fl, update_fr = True, True
         elif front_sel == "Front_L":
             self.motor_states["Front"]["L"] = val
-            update_front = True
+            update_fl = True
         elif front_sel == "Front_R":
             self.motor_states["Front"]["R"] = val
-            update_front = True
+            update_fr = True
 
         # /* Transmit data if any front parameters were modified */
-        if update_front:
-            self._transmit_motor_update("Front")
+        if update_fl or update_fr:
+            self._transmit_motor_update("Front", update_l=update_fl, update_r=update_fr)
 
-        update_back = False
+        update_bl, update_br = False, False
         # /* Evaluate back combobox selection routing */
         if back_sel == "Back_LR":
             self.motor_states["Back"]["L"] = val
             self.motor_states["Back"]["R"] = val
-            update_back = True
+            update_bl, update_br = True, True
         elif back_sel == "Back_L":
             self.motor_states["Back"]["L"] = val
-            update_back = True
+            update_bl = True
         elif back_sel == "Back_R":
             self.motor_states["Back"]["R"] = val
-            update_back = True
+            update_br = True
 
         # /* Transmit data if any back parameters were modified */
-        if update_back:
-            self._transmit_motor_update("Back")
+        if update_bl or update_br:
+            self._transmit_motor_update("Back", update_l=update_bl, update_r=update_br)
 
         self.app_log(f"CONTROL: Combobox Speed updated to {val}.")
         
@@ -1201,16 +1186,29 @@ class MyMonitorApp(QMainWindow):
     # /*
     #  * @brief Helper function to dispatch motor updates to a specific zone.
     #  * @param zone String representing "Front" or "Back".
+    #  * @param update_l Boolean flag to update Left motor.
+    #  * @param update_r Boolean flag to update Right motor.
     #  */
-    def _transmit_motor_update(self, zone):
-        SysLog("Transmitting motor update for zone: %s", zone)
+    def _transmit_motor_update(self, zone, update_l=True, update_r=True):
+        SysLog("Transmitting motor update for zone: %s (L:%s, R:%s)", zone, update_l, update_r)
         ecu_list = self.zone_ecus.get(zone, [])
         
         val_l = self.motor_states[zone]["L"]
         val_r = self.motor_states[zone]["R"]
         
         body = struct.pack("<BBBbBbH", 0xAA, 0, 0xAA, val_l, 0xAA, val_r, 0)
-        payload = self.build_zecu_frame(0xFF00CC0C, body)
+        
+        # /* FrameType mapping based on target motors */
+        if update_l and update_r:
+            frame_type = 0xFF00CC0C  # /* eFrameType_EngineControl3 (Both M0 & M1) */
+        elif update_l:
+            frame_type = 0xFF00CC0A  # /* eFrameType_EngineControl1 (M0 only) */
+        elif update_r:
+            frame_type = 0xFF00CC0B  # /* eFrameType_EngineControl2 (M1 only) */
+        else:
+            return
+            
+        payload = self.build_zecu_frame(frame_type, body)
         
         active_ecu = self.get_active_ecu_name()
         
@@ -1231,7 +1229,7 @@ class MyMonitorApp(QMainWindow):
         self.app_log(f"CONTROL: Front Left Motor adjusted to {value}%")
         SysInfo("CONTROL: Front Left Motor adjusted to %d%%", value)
         self.motor_states["Front"]["L"] = value
-        self._transmit_motor_update("Front")
+        self._transmit_motor_update("Front", update_l=True, update_r=False)
         
         # /* Return from execution */
         return
@@ -1244,7 +1242,7 @@ class MyMonitorApp(QMainWindow):
         self.app_log(f"CONTROL: Front Right Motor adjusted to {value}%")
         SysInfo("CONTROL: Front Right Motor adjusted to %d%%", value)
         self.motor_states["Front"]["R"] = value
-        self._transmit_motor_update("Front")
+        self._transmit_motor_update("Front", update_l=False, update_r=True)
         
         # /* Return from execution */
         return
@@ -1257,7 +1255,7 @@ class MyMonitorApp(QMainWindow):
         self.app_log(f"CONTROL: Back Left Motor adjusted to {value}%")
         SysInfo("CONTROL: Back Left Motor adjusted to %d%%", value)
         self.motor_states["Back"]["L"] = value
-        self._transmit_motor_update("Back")
+        self._transmit_motor_update("Back", update_l=True, update_r=False)
         
         # /* Return from execution */
         return
@@ -1270,7 +1268,7 @@ class MyMonitorApp(QMainWindow):
         self.app_log(f"CONTROL: Back Right Motor adjusted to {value}%")
         SysInfo("CONTROL: Back Right Motor adjusted to %d%%", value)
         self.motor_states["Back"]["R"] = value
-        self._transmit_motor_update("Back")
+        self._transmit_motor_update("Back", update_l=False, update_r=True)
         
         # /* Return from execution */
         return

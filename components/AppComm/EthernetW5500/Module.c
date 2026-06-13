@@ -51,8 +51,11 @@ void Eth_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, Generi
         SysLog("Src MAC: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
     }
 
+    /* Limit printing to the first 32 bytes to prevent Task Watchdog timeout and system delay */
+    Word_t PrintSize = (Size > 128) ? 128 : Size;
+
     /* Iterate through the payload in 8-byte chunks */
-    for (Word_t i = 0; i < Size; i += 8) {
+    for (Word_t i = 0; i < PrintSize; i += 8) {
         char line_buf[128];
         int32_t pos = 0;
         pos += sprintf(line_buf + pos, "%04X: ", i);
@@ -60,7 +63,7 @@ void Eth_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, Generi
         /* Process hex data */
         for (int32_t j = 0; j < 8; j++) {
             /* Check if within payload bounds */
-            if ((i + j) < Size) {
+            if ((i + j) < PrintSize) {
                 pos += sprintf(line_buf + pos, "%02X", pData[i + j]);
             } else {
                 pos += sprintf(line_buf + pos, "  ");
@@ -75,7 +78,7 @@ void Eth_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, Generi
         pos += sprintf(line_buf + pos, " | ");
 
         /* Process ASCII data representation */
-        for (int32_t j = 0; j < 8 && (i + j) < Size; j++) {
+        for (int32_t j = 0; j < 8 && (i + j) < PrintSize; j++) {
             Byte_t byte = pData[i + j];
             
             /* Check if byte is a printable ASCII character */

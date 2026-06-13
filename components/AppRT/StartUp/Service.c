@@ -22,9 +22,9 @@ AppService_t ServiceList[] = {
     [eSERVICE_HEART_BEAT_RUNTIME] =
     {"HeartBeatRuntime",        HeartBeatRuntime,           2048,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
     [eSERVICE_MORTOR_RUNTIME] =
-	{"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0,				eSERVICE_DISABLED},
+	{"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
     [eSERVICE_ULTRA_SONIC_RUNTIME] =
-    {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				eSERVICE_DISABLED},
+    {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
     // {"Chaos_Zero",       Dummy0,                 2048,           NULL,       eTask_Normal,       0},
     // {"Chaos_Max",        Dummy1,                 2048,           NULL,       eTask_Low,          0},
     // {"Chaos_Jitter",     Dummy_Jitter,           2048,           NULL,       eTask_Background,   0},

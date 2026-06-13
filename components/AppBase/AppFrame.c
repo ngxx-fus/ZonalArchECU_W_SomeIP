@@ -102,7 +102,7 @@ static void App_FormatHeader(ZECUFrame_Generic_t* Frame, uint32_t frame_type) {
     
     Frame->Header.MagicByte0 = ZECU_FRAME_HEADER_MAGIC_BYTE;
     Frame->Header.Version    = ZECU_FRAME_VERSION;
-    Frame->Header.MagicByte1 = (uint8_t)~ZECU_FRAME_HEADER_MAGIC_BYTE;
+    Frame->Header.MagicByte1 = ZECU_FRAME_HEADER_MAGIC_BYTE;
     Frame->Header.MagicByte2 = ZECU_FRAME_HEADER_MAGIC_BYTE;
     Frame->Header.FrameType  = frame_type;
 }
@@ -125,7 +125,7 @@ ReturnCode_t App_UpdateTrailer(ZECUFrame_Generic_t* Frame) {
 
     Frame->Trailer.MagicByte0 = ZECU_FRAME_HEADER_MAGIC_BYTE;
     Frame->Trailer.CheckSum   = checksum;
-    Frame->Trailer.MagicByte1 = (uint8_t)~ZECU_FRAME_HEADER_MAGIC_BYTE;
+    Frame->Trailer.MagicByte1 = ZECU_FRAME_HEADER_MAGIC_BYTE;
     Frame->Trailer.CRC        = crc ^ 0xFFFFFFFF;
 
     return STAT_OKE;
@@ -143,7 +143,7 @@ ReturnCode_t App_VerifyPacket(const ZECUFrame_Generic_t* Frame) {
 
     /* Control flow: verify magic bytes in trailer */
     if ((Frame->Trailer.MagicByte0 != ZECU_FRAME_HEADER_MAGIC_BYTE) ||
-        (Frame->Trailer.MagicByte1 != (uint8_t)~ZECU_FRAME_HEADER_MAGIC_BYTE)) {
+        (Frame->Trailer.MagicByte1 != ZECU_FRAME_HEADER_MAGIC_BYTE)) {
         return STAT_ERR_CRC;
     }
 

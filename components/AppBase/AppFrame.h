@@ -29,7 +29,7 @@ extern "C" {
  * Total size: 84 bytes (4-byte aligned).
  */
 typedef struct __attribute__((packed)) {
-    uint8_t             MagicByte0;         /* 0x55 or 0xAA */
+    uint8_t             MagicByte0;         /* 0xAA */
     uint8_t             Version;
     uint8_t             MagicByte1;
     uint8_t             MagicByte2;
