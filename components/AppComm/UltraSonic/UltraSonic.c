@@ -249,7 +249,7 @@ ReturnCode_t UltraSonic_GetDistance(UltraSonic_t *ptr, uint8_t index, uint16_t *
 		return STAT_ERR_INVALID_ARG;
 	}
 
-	if (xSemaphoreTake(ptr->Lock, pdMS_TO_TICKS(10)) != pdTRUE) {
+	if (xSemaphoreTake(ptr->Lock, pdMS_TO_TICKS(50)) != pdTRUE) {
 		return STAT_ERR_TIMEOUT;
 	}
 

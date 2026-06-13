@@ -1,5 +1,6 @@
 #include "Network.h"
-#include "malloc.h"
+#include <malloc.h>
+#include <string.h>
 
 /* GENERIC PAYLOAD UTILS *********************************************************************************************************/
 

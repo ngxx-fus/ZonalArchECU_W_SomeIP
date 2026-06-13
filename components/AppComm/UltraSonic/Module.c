@@ -16,6 +16,8 @@ void HCSR04Runtime(void *arg) {
     (void)arg;
     SysEntry("HCSR04Ctl");
 
+    while(4 >= GlobalInit_GetLevel()){vTaskDelay(pdMS_TO_TICKS(50));}
+    
     g_ultra = UltraSonic_CreateDefault();
     if (g_ultra == NULL) {
         SysErr("[HCSR04Ctl] Ultrasonic object allocation failed");
@@ -29,6 +31,8 @@ void HCSR04Runtime(void *arg) {
         vTaskDelete(NULL);
         return;
     }
+
+    GlobalInit_MoveNextLevel();
 
     SysLog("[HCSR04Ctl] Start collecting ultrasonic distance");
     while (1) {

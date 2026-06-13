@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #ifdef PRINT_HEADER_COMPILE_MESSAGE
-#pragma message ("AppUtils/Arithmetic.h")
+#pragma message ("AppBase/Arithmetic.h")
 #endif
 
 /// Standard definitions for NULL, size_t

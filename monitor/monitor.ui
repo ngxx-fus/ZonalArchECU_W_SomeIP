@@ -708,8 +708,8 @@
     <property name="title">
      <string>File</string>
     </property>
-    <addaction name="actionClose"/>
-    <addaction name="actionClose_app"/>
+    <addaction name="ConnectZECU"/>
+    <addaction name="CloseApp"/>
    </widget>
    <widget class="QMenu" name="menuView">
     <property name="title">
@@ -717,17 +717,18 @@
     </property>
     <addaction name="actionGPS_map"/>
     <addaction name="actionECU_status_graph"/>
+    <addaction name="actionZECU_List"/>
    </widget>
    <addaction name="menuFile"/>
    <addaction name="menuView"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <action name="actionClose">
+  <action name="ConnectZECU">
    <property name="text">
-    <string>Open config</string>
+    <string>Connect ZECU</string>
    </property>
   </action>
-  <action name="actionClose_app">
+  <action name="CloseApp">
    <property name="text">
     <string>Close app</string>
    </property>
@@ -740,6 +741,11 @@
   <action name="actionECU_status_graph">
    <property name="text">
     <string>ECU status graph </string>
+   </property>
+  </action>
+  <action name="actionZECU_List">
+   <property name="text">
+    <string>ZECU List</string>
    </property>
   </action>
  </widget>

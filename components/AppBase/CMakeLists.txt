@@ -1,6 +1,6 @@
 ##DEPRECATED## idf_component_register(
 ##DEPRECATED##     SRCS
-##DEPRECATED##         "AppUtils.c"
+##DEPRECATED##         "AppBase.c"
 ##DEPRECATED##         "Deque.c"
 ##DEPRECATED##     INCLUDE_DIRS
 ##DEPRECATED##         "."

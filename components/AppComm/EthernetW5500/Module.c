@@ -15,10 +15,11 @@ volatile SafeFlag_t      EthCommand;
 
 Eth_ResponseFunction_t Eth_ResponseFunction  = NULL;
 
-#define SOCKET_1_UDP_PORT SOMEIP_PORT_HEX
+#define SOCKET_1_UDP_PORT DEFAULT_PORT_HEX
 
 /* PRIVATE STATE **********************************************************************************************************/
 static ReturnCode_t Eth_LastTxStatus = STAT_OKE;
+static volatile int32_t Eth_InitStatus = 1; /* 1 = Not Started */
 
 /* INTERNAL TASK **********************************************************************************************************/
 
@@ -31,12 +32,12 @@ static Eth_RxCallback_t Eth_RxCallback = NULL;
  * @param SrcMAC Pointer to the 6-byte source MAC address (can be NULL)
  * @param DstMAC Pointer to the 6-byte destination MAC address (can be NULL)
  */
-void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, GenericPtr_t DstMAC) {
-    SysLog("W5500_LogFrame");
+void Eth_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, GenericPtr_t DstMAC) {
+    SysLog("Eth_LogFrame");
 
     Byte_t* pData = Data.UInt8;
     
-    SysLog("W5500_LogFrame(...) : Ethernet Frame Log | Size: %u bytes", Size);
+    SysLog("Eth_LogFrame(...) : Ethernet Frame Log | Size: %u bytes", Size);
 
     /* Check if destination MAC address is provided */
     if (DstMAC.Byte != NULL) {
@@ -91,21 +92,21 @@ void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, Gene
         }
         SysLog("%s", line_buf);
     }
-    SysExit("W5500_LogFrame");
+    SysExit("Eth_LogFrame");
 }
 
 /*
  * @brief Log network information extracted from the received packet
  * @param pkt Pointer to the packet slot in RxPool
  */
-void W5500_LogUDPInfo(PacketSlot_t* pkt) {
+void Eth_LogUDPInfo(PacketSlot_t* pkt) {
     /* Validate packet pointer */
     if (pkt == NULL) {
         /* Abort if packet is null */
         return;
     }
     
-    SysLog("W5500_LogUDPInfo(...) : Network Info Extracted");
+    SysLog("Eth_LogUDPInfo(...) : Network Info Extracted");
     SysLog("    |- Src IP   : %u.%u.%u.%u", 
             pkt->SrcIP.Byte[0], pkt->SrcIP.Byte[1], pkt->SrcIP.Byte[2], pkt->SrcIP.Byte[3]);
     SysLog("    |- Src Port : %u", pkt->SrcPort.Word);
@@ -188,7 +189,7 @@ static void W5500_TaskComm_SocketNSendUDP(PacketSlot_t* tx_pkt) {
         
         wait_ticks++;
         if (wait_ticks > 100) {
-            vTaskDelay(pdMS_TO_TICKS(1));
+            vTaskDelay(pdMS_TO_TICKS(50));
         } else {
             taskYIELD();
         }
@@ -694,8 +695,8 @@ __attribute__((weak)) void Eth_WeakRxCallback(PacketSlot_t* pkt) {
     }
     SysLog("Eth_WeakRxCallback(...):  Process packet, Size=%d, Prio ID=0x%02X", pkt->Size, pkt->Data[0]);
     
-    W5500_LogUDPInfo(pkt);
-    W5500_LogFrame((GenericPtr_t)pkt->Data, pkt->Size, GenericNullPtr, GenericNullPtr);
+    Eth_LogUDPInfo(pkt);
+    Eth_LogFrame((GenericPtr_t)pkt->Data, pkt->Size, GenericNullPtr, GenericNullPtr);
     TxPacket_Push(pkt->Size, (GenericPtr_t)pkt->Data, pkt->SrcIP.Byte, pkt->SrcPort.Word, pkt->SrcMAC.Byte);
     
     /* Verify communication task readiness before notification */
@@ -719,11 +720,22 @@ ReturnCode_t Eth_RequestResponseNow(){
 /* INTERNAL TASK *Eth_RequestResponseNow*********************************************************************************************************/
 
 /*
+ * @brief Get the initialization status of the module
+ * @return 0 = OK, 1 = Not Started, 2 = Initializing
+ */
+ReturnCode_t Eth_InitializeStatus(void) {
+    return Eth_InitStatus;
+}
+
+/*
  * @brief  Serivce handle W5500 module
  * @param arg Ignored
  */
-void W5500CommRuntime(void* arg){
+void Eth_Runtime(void* arg){
+    Eth_InitStatus = 2; /* 2 = Initializing */
     SysEntry("W5500CommCtl");
+
+    while(1 >= GlobalInit_GetLevel()){vTaskDelay(pdMS_TO_TICKS(50));}
     
     ReturnCode_t RetVal;
     
@@ -735,6 +747,7 @@ void W5500CommRuntime(void* arg){
     /* Ensure the Ethernet hardware object was constructed */
     if (IsNull(Eth)) {
         SysErr("W5500CommCtl(...) : Cannot initialize `Eth`!");
+        Eth_InitStatus = 1; /* Reset state on failure */
         /* Branch to cleanup on fatal error */
         goto CLEANUP_AND_EXIT;
     }
@@ -744,6 +757,7 @@ void W5500CommRuntime(void* arg){
     /* Validate hardware initialization status */
     if(RetVal != STAT_OKE){
         SysErr("W5500CommCtl(...): Cannot initialize module W5500! ErrorCode=%d", RetVal);
+        Eth_InitStatus = 1; /* Reset state on failure */
         /* Branch to cleanup if setup failed */
         goto CLEANUP_AND_EXIT;
     }
@@ -759,8 +773,12 @@ void W5500CommRuntime(void* arg){
         &W5500_TaskComm_TaskHandler
     );
     
+    Eth_InitStatus = 0; /* 0 = Initialization OK & Completed */
+    
     SysLog("W5500CommCtl(...) : Join forever loop...");
     
+    GlobalInit_MoveNextLevel();
+
     /* Run the main network management routine indefinitely */
     while (1) {
         SysLog("W5500CommCtl(...) : W5500 version=%X", W5500_GetModuleVersion(Eth));

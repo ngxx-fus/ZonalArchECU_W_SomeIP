@@ -2,7 +2,7 @@
 #define __HBRIDGE_MODULE_H__
 
 #include "../../AppESPWrap/All.h"
-#include "../../AppUtils/All.h"
+#include "../../AppBase/All.h"
 #include "./HBridge.h"
 
 /* --- GLOBAL DATA EXPOSURE --- */

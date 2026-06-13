@@ -17,14 +17,14 @@
 /// @brief List of services to be startup
 AppService_t ServiceList[] = {
     /*name*/                /*function ptr*/        		/*Stack Size*//*ParamPtr*//*Priority*/        /*TaskHandle*/	/*Status*/
-    [eSERVICE_MORTOR_RUNTIME] =
-	{"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
     [eSERVICE_ETHERNET_RUNTIME] =
-    {"EthRuntime",              W5500CommRuntime,     		2048,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
-    [eSERVICE_ULTRA_SONIC_RUNTIME] =
-    {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
+    {"EthRuntime",              Eth_Runtime,     			2048,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
     [eSERVICE_HEART_BEAT_RUNTIME] =
     {"HeartBeatRuntime",        HeartBeatRuntime,           2048,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
+    [eSERVICE_MORTOR_RUNTIME] =
+	{"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0,				eSERVICE_DISABLED},
+    [eSERVICE_ULTRA_SONIC_RUNTIME] =
+    {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				eSERVICE_DISABLED},
     // {"Chaos_Zero",       Dummy0,                 2048,           NULL,       eTask_Normal,       0},
     // {"Chaos_Max",        Dummy1,                 2048,           NULL,       eTask_Low,          0},
     // {"Chaos_Jitter",     Dummy_Jitter,           2048,           NULL,       eTask_Background,   0},
@@ -59,6 +59,14 @@ ReturnCode_t AppInit() {
 			SysLog("AppInit(...): Service \"%s\" is disabled due to `ZECU_DISABLE_ALL_SERVICES!=0` macro. Clear it to re-enable!", srv->Name);
 		#endif /*iodefine"?*/
 	}
+	SysLog("AppInit(): Started all services!");
+	GlobalInit_MoveNextLevel();
+
+	do {
+		vTaskDelay(pdMS_TO_TICKS(100));
+		GlobalInit_MoveNextLevel();
+		SysLog("AppInit(...): Auto move to %u", GlobalInit_GetLevel());
+	} while(GLOBAL_INIT_LEVEL_DONE > GlobalInit_GetLevel());
 
 	SysExit("AppInit");
 	return STAT_OKE;

@@ -31,7 +31,7 @@ idf_component_register(
     INCLUDE_DIRS ${include_dirs}
     REQUIRES 
         "AppConfig"
-        "AppUtils" 
+        "AppBase" 
         "AppESPWrap" 
         esp_driver_gpio 
         esp_driver_spi 
@@ -85,7 +85,7 @@ idf_component_register(
 ##DEPRECATED##     INCLUDE_DIRS "${include_dirs}"
 ##DEPRECATED##     REQUIRES 
 ##DEPRECATED##         "AppConfig"
-##DEPRECATED##         "AppUtils" 
+##DEPRECATED##         "AppBase" 
 ##DEPRECATED##         "AppESPWrap" 
 ##DEPRECATED##         esp_driver_gpio 
 ##DEPRECATED##         esp_driver_spi 

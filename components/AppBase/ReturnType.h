@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #ifdef PRINT_HEADER_COMPILE_MESSAGE
-#pragma message ("AppUtils/ReturnType.h")
+#pragma message ("AppBase/ReturnType.h")
 #endif
 
 #include "stdio.h"

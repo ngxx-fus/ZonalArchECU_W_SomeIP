@@ -6,7 +6,7 @@ extern "C" {
 #endif
 
 #ifdef PRINT_HEADER_COMPILE_MESSAGE
-#pragma message ("AppUtils/Loop.h")
+#pragma message ("AppBase/Loop.h")
 #endif
 
 

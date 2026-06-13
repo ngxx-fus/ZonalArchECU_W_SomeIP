@@ -3,10 +3,187 @@
 #include "../__CommonHeaders.h"
 #include "../../AppComm/SharedAPIs.h"
 
-/*
- * @brief Application-level Ethernet Rx Callback.
- * @param pkt Pointer to the received packet slot.
+#include "nvs_flash.h"
+#include "nvs.h"
+#include "driver/gpio.h"
+
+/* Control flow: Define Heartbeat State Machine Steps */
+enum App_HeartBeat_State_e {
+    eSTATE_BROADCAST        = 0x00, ///< Node is broadcasting its presence
+    eSTATE_AUTHENTICATION   = 0x01, ///< Node is performing Challenge-Response Auth
+    eSTATE_CONNECTED        = 0x02, ///< Node is fully authenticated and streaming data
+    eSTATE_EMERGENCY_STOP   = 0x03  ///< Node is in fault/emergency halt state
+};
+
+/* * Typedef to force the state machine variable to 1-byte (uint8_t).
+* Prevents compiler from implicitly using 4-byte integers for the enum.
+*/
+typedef uint8_t App_HeartBeat_State_t;
+
+/* Configuration Constants */
+#define CCU_KEEPALIVE_TIMEOUT_MS  (1000U)
+#define BOOT_BUTTON_PIN           (0)
+
+/* Internal variable tracking the current connection state */
+volatile static App_HeartBeat_State_t App_HeartBeat_State = (App_HeartBeat_State_t)eSTATE_BROADCAST;
+volatile static IPv4EndPoint_t        CCU_EP;
+
+
+/* ZECU_Frame_Header*/
+ZECUFrame_Header_t ZECU_Frame_Header = {
+    .MagicByte0 = ZECU_FRAME_HEADER_MAGIC_BYTE,
+    .Version    = ZECU_FRAME_VERSION,
+    .MagicByte1 = ZECU_FRAME_HEADER_MAGIC_BYTE,
+    .MagicByte2 = ZECU_FRAME_HEADER_MAGIC_BYTE,
+    .Info       = {
+        .Label          = ECU_NAME_STR,
+        .MAC            = SRC_MAC_ADDR_INITIALIZER,
+        .MagicByte3     = ZECU_FRAME_HEADER_MAGIC_BYTE,
+        .IPv4Address    = SRC_IP_ADDR_INITIALIZER,
+        .IPv4Port       = DEFAULT_PORT_HEX,
+        .MagicByte4     = ZECU_FRAME_HEADER_MAGIC_BYTE,
+        .MagicByte5     = ZECU_FRAME_HEADER_MAGIC_BYTE,
+        .MagicByte6     = ZECU_FRAME_HEADER_MAGIC_BYTE
+    }
+};
+
+ZECUFrame_Body_Broadcast_t ZECU_Frame_Body_Broadcast = {
+    .MagicDWord0    = ZECU_FRAME_HEADER_MAGIC_DWORD,
+    .ServiceCount   = ZECU_FRAME_SERVICE_NUM
+};
+
+/* Internal state variable to keep track of the Challenge generated for Auth */
+static uint64_t last_challenge = 0;
+
+/* Timestamp of the last valid Keep-Alive received from CCU */
+static volatile TickType_t last_keepalive_time = 0;
+
+/* --- NVS STORAGE UTILITIES --- */
+
+/**
+ * @brief Saves the current CCU endpoint to Non-Volatile Storage
  */
+static void NVS_SaveCCUEndpoint(void) {
+    nvs_handle_t my_handle;
+    esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
+    if (err == ESP_OK) {
+        nvs_set_blob(my_handle, "ccu_ep", (void*)&CCU_EP, sizeof(IPv4EndPoint_t));
+        nvs_commit(my_handle);
+        nvs_close(my_handle);
+        SysLog("NVS: CCU Endpoint saved successfully.");
+    }
+}
+
+/**
+ * @brief Loads the CCU endpoint from Non-Volatile Storage on boot
+ * @return true if loaded successfully, false otherwise
+ */
+static bool NVS_LoadCCUEndpoint(void) {
+    nvs_handle_t my_handle;
+    esp_err_t err = nvs_open("storage", NVS_READONLY, &my_handle);
+    if (err == ESP_OK) {
+        size_t required_size = sizeof(IPv4EndPoint_t);
+        err = nvs_get_blob(my_handle, "ccu_ep", (void*)&CCU_EP, &required_size);
+        nvs_close(my_handle);
+        if (err == ESP_OK && required_size == sizeof(IPv4EndPoint_t)) {
+            SysLog("NVS: Loaded CCU Endpoint -> IP: %u.%u.%u.%u Port: %u", 
+                CCU_EP.Member.Addr.Byte[3], CCU_EP.Member.Addr.Byte[2], 
+                CCU_EP.Member.Addr.Byte[1], CCU_EP.Member.Addr.Byte[0], 
+                CCU_EP.Member.Port.Word);
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * @brief Erases the saved CCU endpoint from Non-Volatile Storage
+ */
+static void NVS_EraseCCUEndpoint(void) {
+    nvs_handle_t my_handle;
+    if (nvs_open("storage", NVS_READWRITE, &my_handle) == ESP_OK) {
+        nvs_erase_key(my_handle, "ccu_ep");
+        nvs_commit(my_handle);
+        nvs_close(my_handle);
+        SysLog("NVS: CCU Endpoint erased.");
+    }
+}
+
+void ParsePacket(PacketSlot_t* pkt){
+    if(IsNull(pkt)) return;
+    if(pkt->Size < sizeof(ZECUFrame_Generic_t)) {
+        SysLog("ParsePacket(...): Frame is not recognized!");
+        return;
+    }
+    ZECUFrame_Generic_t * Fr = (ZECUFrame_Generic_t*)pkt->Data;
+    
+    if(Fr->Header.FrameType != eFrameType_KeepAlive){
+        /* 3. Log raw frame data (Hex and ASCII dump) */
+        Eth_LogFrame((GenericPtr_t)pkt->Data, pkt->Size, GenericNullPtr, GenericNullPtr);
+    }
+
+    /* 1. Ensure the Frame has valid Checksum/CRC before acting on commands */
+    if(App_VerifyPacket(Fr) != STAT_OKE) {
+        SysErr("ParsePacket(...): Received frame failed CRC/Checksum validation!");
+        return;
+    }
+    
+    SysLog("ParsePacket(...): Name: %s", Fr->Header.Info.Label);
+    SysLog("ParsePacket(...): IP: %u.%u.%u.%u", 
+           Fr->Header.Info.IPv4Address[0], Fr->Header.Info.IPv4Address[1], 
+           Fr->Header.Info.IPv4Address[2], Fr->Header.Info.IPv4Address[3]);
+    SysLog("ParsePacket(...): Port: %d", Fr->Header.Info.IPv4Port);
+    
+    /* 2. Process Pairing Requests (Monitor sent ePairingRequest_New) */
+    if (Fr->Header.FrameType == eFrameType_PairingRequest) {
+        if (Fr->Body.PairingRequest.Request == ePairingRequest_New) {
+            SysLog("AUTH: Received PairingRequest from CCU.");
+            
+            /* Save CCU IPv4(Address/Port) to dynamic Endpoint */
+            CCU_EP.Member.Addr.Dword = IPv4ToUint32(
+                Fr->Header.Info.IPv4Address[0],
+                Fr->Header.Info.IPv4Address[1],
+                Fr->Header.Info.IPv4Address[2],
+                Fr->Header.Info.IPv4Address[3]
+            );
+            CCU_EP.Member.Port.Word = Fr->Header.Info.IPv4Port;
+
+            /* Change State Machine */
+            App_HeartBeat_State = eSTATE_AUTHENTICATION;
+        }
+    }
+    /* 3. Process Keep-Alive frames to feed the watchdog */
+    else if (Fr->Header.FrameType == eFrameType_KeepAlive) {
+        /* Feed the CCU Keep-Alive Watchdog */
+        last_keepalive_time = xTaskGetTickCount();
+        return; /* Skip further logging for Keep-Alive to prevent UART spam */
+    }
+    /* 3. Process Authentication Response (Monitor signed the challenge) */
+    else if (Fr->Header.FrameType == eFrameType_AuthRX) {
+        SysLog("AUTH: Received AuthRX (Signature) from CCU.");
+        Auth_SetCoreKey(0xDEADBEEF);
+        
+        if (App_VerifyFrame_AuthRX(Fr, last_challenge) == STAT_OKE) {
+            SysLog("AUTH: Authentication SUCCESS! Handshake Complete.");
+            
+            /* Save the validated Endpoint to NVS for future reboots */
+            NVS_SaveCCUEndpoint();
+            
+            /* Transition into CONNECTED state, freeing the Heartbeat broadcast loop */
+            App_HeartBeat_State = eSTATE_CONNECTED;
+        } else {
+            SysErr("AUTH: Authentication FAILED! Signature mismatch.");
+            
+            /* Revert back to broadcasting */
+            App_HeartBeat_State = eSTATE_BROADCAST;
+        }
+    }
+}
+
+/*
+* @brief Application-level Ethernet Rx Callback.
+* @param pkt Pointer to the received packet slot.
+*/
 void App_EthernetRxCallback(PacketSlot_t* pkt) {
     /* 1. Ignore if packet pointer is invalid */
     if (pkt == NULL) {
@@ -15,29 +192,18 @@ void App_EthernetRxCallback(PacketSlot_t* pkt) {
     
     /* 2. Log Network Info using public W5500 module APIs */
     SysLog("App_EthernetRxCallback(...): Received packet");
-    W5500_LogUDPInfo(pkt);
+    Eth_LogUDPInfo(pkt);
 
-    /* 3. Log raw frame data (Hex and ASCII dump) */
-    W5500_LogFrame((GenericPtr_t)pkt->Data, pkt->Size, GenericNullPtr, GenericNullPtr);
-
-    /* 4. Parse the received packet to extract CCU telemetry commands */
-    ParseCCUPacket((const uint8_t*)pkt->Data, pkt->Size);
-    
-    /* 5. Optional: Echo the packet back (remove if not needed) */
-    TxPacket_Push(pkt->Size, (GenericPtr_t)pkt->Data, pkt->SrcIP.Byte, pkt->SrcPort.Word, pkt->SrcMAC.Byte);
-    
-    /* Notify communication task to send out the Echo packet */
-    if (W5500_TaskComm_TaskHandler != NULL) {
-        xTaskNotifyGive(W5500_TaskComm_TaskHandler);
-    }
+    /* 3. Parse the received packet using the updated ZECU Frame protocol */
+    ParsePacket(pkt);
 }
 
 extern int32_t ConvertRawToPercent(int32_t rawValue);
 
 void App_SendImmediateHeartbeat(void) {
-    SF_ECUState_t ecuState;
-    memset(&ecuState, 0, sizeof(SF_ECUState_t));
-    memcpy(&ecuState.ECUInfo, &ECUInfo, sizeof(ECUInfo));
+    ZECUFrame_Generic_t tx_frame;
+    memset(&tx_frame, 0, sizeof(ZECUFrame_Generic_t));
+    memcpy(&tx_frame.Header, &ZECU_Frame_Header, sizeof(ZECUFrame_Header_t));
 
     static uint8_t sync_num_immediate = 0;
 
@@ -50,31 +216,18 @@ void App_SendImmediateHeartbeat(void) {
     uint16_t dist1_cm = (dist1_mm != 0xFFFFU) ? (dist1_mm / 10U) : 0x3FF;
     uint16_t dist2_cm = (dist2_mm != 0xFFFFU) ? (dist2_mm / 10U) : 0x3FF;
 
-    ecuState.Distance.Fields.D0 = dist0_cm & 0x3FF;
-    ecuState.Distance.Fields.D1 = dist1_cm & 0x3FF;
-    ecuState.Distance.Fields.D2 = dist2_cm & 0x3FF;
-    ecuState.Distance.Fields.SyncNum = sync_num_immediate & 0x03;
-
     /* Read latest motor speeds and convert */
     int32_t m0 = ConvertRawToPercent(MotorGetSpeed0());
     int32_t m1 = ConvertRawToPercent(MotorGetSpeed1());
 
-    ecuState.Motor.Fields.M0 = (m0 + 100) & 0xFF;
-    ecuState.Motor.Fields.M1 = (m1 + 100) & 0xFF;
-    ecuState.Motor.Fields.SyncNum = sync_num_immediate & 0x03;
-    ecuState.Motor.Fields.Reserved = 0;
+    App_WriteFrame_HeartBeat(&tx_frame, sync_num_immediate, dist0_cm, dist1_cm, dist2_cm, (int8_t)m0, (int8_t)m1, 0, 0);
 
     sync_num_immediate = (sync_num_immediate + 1) % 4;
 
-    ReturnCode_t ret = Eth_SendUDPPacket(CCU_IP_ADDR, CCU_UDP_PORT, (uint8_t*)&ecuState, sizeof(SF_ECUState_t));
+    ReturnCode_t ret = Eth_SendUDPPacket(CCU_EP.Member.Addr.Dword, CCU_EP.Member.Port.Word, (uint8_t*)&tx_frame, sizeof(ZECUFrame_Generic_t));
     if (ret == STAT_OKE) {
         SysLog("App_SendImmediateHeartbeat: Sent ECU State -> D0: %u, D1: %u, D2: %u, M0: %u, M1: %u, SyncNum: %u",
-               ecuState.Distance.Fields.D0,
-               ecuState.Distance.Fields.D1,
-               ecuState.Distance.Fields.D2,
-               ecuState.Motor.Fields.M0,
-               ecuState.Motor.Fields.M1,
-               ecuState.Distance.Fields.SyncNum);
+            dist0_cm, dist1_cm, dist2_cm, m0, m1, (sync_num_immediate - 1) & 0x03);
     } else {
         SysErr("App_SendImmediateHeartbeat: Failed to send ECU State! Error: %d", ret);
     }
@@ -94,28 +247,164 @@ void Eth_CallBackSetUp(){
     SysLog("Eth_CallBackSetUp(...): Application Ethernet Rx Callback registered successfully.");
 }
 
-/*
- * @brief High-level control task to collect and transmit ECU state periodically.
- * @param arg Pointer to task arguments (unused).
+/**
+ * @brief Connects the ZECU to the CCU by handling the full handshake (Broadcast -> Auth -> Connected).
+ * @return ReturnCode_t STAT_OKE upon successful execution.
  */
+ReturnCode_t App_ConnectCCU(void) {
+    ZECUFrame_Generic_t tx_frame;
+    uint16_t total_frame_size = sizeof(ZECUFrame_Generic_t); /* Exactly 612 bytes */
+    TickType_t auth_start_time;
+
+    /* Ensure state is reset to broadcast if not already authenticating */
+    if (App_HeartBeat_State != eSTATE_AUTHENTICATION) {
+        App_HeartBeat_State = eSTATE_BROADCAST;
+    }
+
+    /* State machine entry point */
+    __STATE_BROADCAST__:
+    while (eSTATE_BROADCAST == App_HeartBeat_State) {
+        /* Assemble the generic frame from static components */
+        memset(&tx_frame, 0, sizeof(ZECUFrame_Generic_t));
+        memcpy(&tx_frame.Header, &ZECU_Frame_Header, sizeof(ZECUFrame_Header_t));
+        tx_frame.Header.FrameType = eFrameType_Broadcast;
+        memcpy(&tx_frame.Body.Broadcast, &ZECU_Frame_Body_Broadcast, sizeof(ZECUFrame_Body_Broadcast_t));
+
+        /* Update the Trailer (Calculates Checksum and CRC over the full 604 byte payload) */
+        App_UpdateTrailer(&tx_frame);
+
+        /* Broadcast the frame via UDP (Broadcast IP = 255.255.255.255 = 0xFFFFFFFF) */
+        Eth_SendUDPPacket(0xFFFFFFFF, CCU_UDP_PORT, (uint8_t*)&tx_frame, total_frame_size);
+        
+        SysLog("App_ConnectCCU(...): Broadcasted ZECU Services (%u bytes)", total_frame_size);
+
+        /* Delay before the next broadcast transmission */
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+    
+    // __STATE_AUTHENTICATION__:
+    if (eSTATE_AUTHENTICATION == App_HeartBeat_State) {
+        auth_start_time = xTaskGetTickCount();
+        
+        memset(&tx_frame, 0, sizeof(ZECUFrame_Generic_t));
+        memcpy(&tx_frame.Header, &ZECU_Frame_Header, sizeof(ZECUFrame_Header_t));
+        
+        Auth_SetCoreKey(0xDEADBEEF); /* Use fixed Master Key */
+        
+        /* Generate a single Challenge and pack it into the AuthTX frame */
+        App_WriteFrame_AuthTX(&tx_frame, 1, xTaskGetTickCount());
+        last_challenge = tx_frame.Body.AuthTX.Challenge;
+
+        while (eSTATE_AUTHENTICATION == App_HeartBeat_State) {
+            if ((xTaskGetTickCount() - auth_start_time) > pdMS_TO_TICKS(5000)) {
+                SysErr("App_ConnectCCU: Timeout (5s) waiting for AuthRX! Reverting to BROADCAST.");
+                App_HeartBeat_State = eSTATE_BROADCAST;
+                goto __STATE_BROADCAST__;
+            }
+
+            /* Dispatch the AuthTX Challenge to CCU using the saved dynamic endpoint */
+            Eth_SendUDPPacket(CCU_EP.Member.Addr.Dword, CCU_EP.Member.Port.Word, (uint8_t*)&tx_frame, total_frame_size);
+            SysLog("AUTH: Sent AuthTX (Challenge) to CCU.");
+
+            vTaskDelay(pdMS_TO_TICKS(200));
+        }
+    }
+    
+    if (eSTATE_CONNECTED == App_HeartBeat_State) {
+        /* Save CCU IPv4(Address/Port)*/
+        /* Update CCU_EP */
+        /* (Already captured during PairingRequest to enable AuthTX routing) */
+        return STAT_OKE;
+    } else {
+        goto __STATE_BROADCAST__; /* Fallback for unexpected state transitions */
+    }
+}
+
+/*
+* @brief High-level control task to collect and transmit ECU state periodically.
+* @param arg Pointer to task arguments (unused).
+*/
 void HeartBeatRuntime(void* arg) {
     SysEntry("HeartBeatRuntime");
-    SysLog("HeartBeatRuntime(...): Started! Target CCU: 10.0.0.100:%d", CCU_UDP_PORT);
+    SysLog("HeartBeatRuntime(...): Started! Waiting for CCU Pairing...");
 
     MotorSetSpeed0(0);
     MotorSetSpeed1(0);
 
+    /* Initialize NVS Flash for persistent storage */
+    esp_err_t ret_nvs = nvs_flash_init();
+    if (ret_nvs == ESP_ERR_NVS_NO_FREE_PAGES || ret_nvs == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret_nvs = nvs_flash_init();
+    }
+    
+    /* Configure BOOT Button (GPIO0) as input with pull-up */
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << BOOT_BUTTON_PIN),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
+    gpio_config(&io_conf);
+
     /* Register the Ethernet data reception callback before entering the loop */
     Eth_CallBackSetUp();
 
-    SF_ECUState_t ecuState;
-    memset(&ecuState, 0, sizeof(SF_ECUState_t));
-    memcpy(&ecuState.ECUInfo, &ECUInfo, sizeof(ECUInfo));
+    /* Populate the static broadcast body with our service list */
+    memcpy(ZECU_Frame_Body_Broadcast.Services, ZECUFrame_ServiceList, sizeof(ZECUFrame_Service_t) * ZECU_FRAME_SERVICE_NUM);
+
+    /* Wait for system Initialization to pass phase 3 */
+    while(3 >= GlobalInit_GetLevel()){vTaskDelay(pdMS_TO_TICKS(50));}
+    GlobalInit_MoveNextLevel();
+
+    ZECUFrame_Generic_t tx_frame;
+    memset(&tx_frame, 0, sizeof(ZECUFrame_Generic_t));
+    memcpy(&tx_frame.Header, &ZECU_Frame_Header, sizeof(ZECUFrame_Header_t));
 
     static uint8_t sync_num = 0;
+    
+    /* Attempt to restore connection from NVS */
+    if (NVS_LoadCCUEndpoint()) {
+        App_HeartBeat_State = eSTATE_CONNECTED;
+        last_keepalive_time = xTaskGetTickCount();
+        SysLog("HeartBeatRuntime: Restored previous CCU connection from NVS.");
+    }
 
     /* Infinite loop to periodically process and dispatch heartbeat frames */
     while (1) {
+        /* --- HARDWARE RESET TRIGGER --- */
+        /* Check if BOOT button is pressed (Active LOW) */
+        if (gpio_get_level(BOOT_BUTTON_PIN) == 0) {
+            SysLog("HeartBeatRuntime: BOOT Button pressed! Forcing network reset...");
+            NVS_EraseCCUEndpoint();
+            App_HeartBeat_State = eSTATE_BROADCAST;
+            vTaskDelay(pdMS_TO_TICKS(500)); /* Simple debounce delay */
+            continue;
+        }
+
+        /* Handle connection and authentication handshake */
+        if (App_HeartBeat_State != eSTATE_CONNECTED) {
+            App_ConnectCCU();
+            last_keepalive_time = xTaskGetTickCount();
+            continue;
+        }
+
+        /* --- CCU KEEPALIVE TIMEOUT WATCHDOG --- */
+        if (App_HeartBeat_State == eSTATE_CONNECTED) {
+            if ((xTaskGetTickCount() - last_keepalive_time) > pdMS_TO_TICKS(CCU_KEEPALIVE_TIMEOUT_MS)) {
+                SysErr("HeartBeatRuntime: CCU Keep-Alive Timeout (> %d ms)! Reverting to Broadcast.", CCU_KEEPALIVE_TIMEOUT_MS);
+                App_HeartBeat_State = eSTATE_BROADCAST;
+                continue;
+            }
+        }
+        
+        /* Do not dispatch telemetry if not fully connected */
+        if (App_HeartBeat_State != eSTATE_CONNECTED) {
+            (void)ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(HEART_TASK_CYCLE_MS));
+            continue;
+        }
+
         uint16_t 
             dist0_mm = 0, dist1_mm = 0, dist2_mm = 0, 
             dist0_cm = 0, dist1_cm = 0, dist2_cm = 0;
@@ -151,42 +440,22 @@ void HeartBeatRuntime(void* arg) {
             }
         }
 
-
-        /* 2. Pack the retrieved information into the ECU state structure */
-        ecuState.Distance.Fields.D0 = dist0_cm & 0x3FF;
-        ecuState.Distance.Fields.D1 = dist1_cm & 0x3FF;
-        ecuState.Distance.Fields.D2 = dist2_cm & 0x3FF;
-        ecuState.Distance.Fields.SyncNum = sync_num & 0x03;
-
-        // /* Get actual motor speeds (absolute value to fit 10-bit unsigned field) */
-        // ecuState.Motor.Fields.M0 = (abs(MotorGetSpeed0())) & 0x3FF;
-        // ecuState.Motor.Fields.M1 = (abs(MotorGetSpeed1())) & 0x3FF;
-        // ecuState.Motor.Fields.SyncNum = sync_num & 0x03;
-        // ecuState.Motor.Fields.Reserved = 0;
-        
         /* Scale actual motor speeds from 0~1024 to -100~100 */
         int32_t m0 = ConvertRawToPercent(MotorGetSpeed0());
         int32_t m1 = ConvertRawToPercent(MotorGetSpeed1());
 
-        ecuState.Motor.Fields.M0 = (m0 + 100) & 0xFF;
-        ecuState.Motor.Fields.M1 = (m1 + 100) & 0xFF;
-        ecuState.Motor.Fields.SyncNum = sync_num & 0x03;
-        ecuState.Motor.Fields.Reserved = 0;
+        /* 2. Pack the retrieved information into the generic frame structure */
+        App_WriteFrame_HeartBeat(&tx_frame, sync_num, dist0_cm, dist1_cm, dist2_cm, (int8_t)m0, (int8_t)m1, 0, 0);
 
         sync_num = (sync_num + 1) % 4;
 
-        /* 3. Dispatch the packed UDP payload via the W5500 network layer */
-        ReturnCode_t ret = Eth_SendUDPPacket(CCU_IP_ADDR, CCU_UDP_PORT, (uint8_t*)&ecuState, sizeof(SF_ECUState_t));
+        /* 3. Dispatch the packed UDP payload to the dynamically paired CCU */
+        ReturnCode_t ret = Eth_SendUDPPacket(CCU_EP.Member.Addr.Dword, CCU_EP.Member.Port.Word, (uint8_t*)&tx_frame, sizeof(ZECUFrame_Generic_t));
         
         /* Evaluate the transmission status and log the outcome */
         if (ret == STAT_OKE) {
-            SysLog("HeartBeatRuntime: Sent ECU State -> D0: %u, D1: %u, D2: %u, M0: %u, M1: %u, SyncNum: %u", 
-                   ecuState.Distance.Fields.D0,
-                   ecuState.Distance.Fields.D1,
-                   ecuState.Distance.Fields.D2,
-                   ecuState.Motor.Fields.M0,
-                   ecuState.Motor.Fields.M1,
-                   ecuState.Distance.Fields.SyncNum);
+            SysLog("HeartBeatRuntime: Sent ECU State -> D0: %u, D1: %u, D2: %u, M0: %d, M1: %d, SyncNum: %u", 
+                dist0_cm, dist1_cm, dist2_cm, m0, m1, (sync_num - 1) & 0x03);
         } else {
             SysErr("HeartBeatRuntime: Failed to send ECU State! Error: %d", ret);
         }

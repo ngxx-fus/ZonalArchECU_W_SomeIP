@@ -5,9 +5,12 @@ import sys
 import time
 import socket
 import signal
+import struct
 from datetime import datetime
-from PySide6.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QTextEdit
+from PySide6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QTextEdit, 
+                               QDialog, QTreeView, QMenu)
 from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtGui import QStandardItemModel, QStandardItem
 from collections import deque
 
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
@@ -17,6 +20,8 @@ from MonitorConfig import *
 
 # /* Import external components */
 from monitor_ui import Ui_MainWindow
+from monitor_connect_zecu import Ui_ConnectZECU
+from monitor_auth import NodeAuth
 from CoreNetwork import ZoneECU, CCUCommandBuilder
 from UdpListener import UdpListenerThread
 
@@ -27,6 +32,150 @@ from UdpListener import UdpListenerThread
 GLOBAL_LAT = 10.762622
 GLOBAL_LON = 106.660172
 MAX_GSP_MAP_REFRESH_TIME_SEC = 3
+
+# /* Constants for Custom Keep-Alive Protocol */
+KEEPALIVE_MAGIC = 0x55
+KEEPALIVE_FRAME_TYPE = 0x5500AA00
+
+# /* ========================================================================= */
+# /* ZECU DISCOVERY DIALOG                                                     */
+# /* ========================================================================= */
+
+class DiscoveryDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.ui = Ui_ConnectZECU()
+        self.ui.setupUi(self)
+        self.setWindowTitle("Discovered ZECUs (Broadcast Scan)")
+        
+        self.tree = self.ui.TreeView_ListECU
+        
+        self.model = QStandardItemModel()
+        self.model.setHorizontalHeaderLabels(["Name / Service", "Details"])
+        self.tree.setModel(self.model)
+        
+        self.tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.tree.customContextMenuRequested.connect(self.on_context_menu)
+        
+        self.discovered_ecus = {}
+        
+        # Tạo Socket độc lập để bắt gói Broadcast
+        self.udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if hasattr(socket, 'SO_REUSEPORT'):
+                self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            self.udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            self.udp_sock.bind(("0.0.0.0", 30490))
+        except Exception as e:
+            print(f"Warning: Cannot bind Discovery Socket ({e})")
+            
+        self.udp_sock.setblocking(False)
+        
+        # Quét gói tin mỗi 100ms
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.poll_udp)
+        self.timer.start(100)
+        
+    def poll_udp(self):
+        try:
+            while True:
+                data, addr = self.udp_sock.recvfrom(2048)
+                print(f"[Discovery] RX: {len(data)} bytes from {addr[0]}")
+                self.parse_broadcast(data, addr[0])
+        except BlockingIOError:
+            pass # Typical for non-blocking sockets when empty
+        except socket.error as e:
+            if e.errno != 11: # Ignore EAGAIN/EWOULDBLOCK
+                print(f"[Discovery] Socket error: {e}")
+            
+    def parse_broadcast(self, data, ip):
+        # Kiểm tra kích thước tối thiểu (88 byte Header + 8 byte BodyHeader)
+        if len(data) < 96: 
+            print(f"[-] Dropped: Packet too small ({len(data)} < 96)")
+            return
+        
+        # Unpack ZECUFrame_Header_t (88 bytes)
+        try:
+            magic0, ver, magic1, magic2, label_bytes, mac_bytes, m3, ip_bytes, port, m4, m5, m6, frame_type = struct.unpack_from("<BBBB64s6sB4sHBBBI", data, 0)
+        except Exception as e:
+            print(f"[-] Unpack Header Error: {e}")
+            return
+            
+        if magic0 != 0xAA or ver != 0x04 or magic1 != 0xAA or magic2 != 0xAA: 
+            print(f"[-] Dropped: Magic/Version mismatch ({magic0:02X} {ver:02X})")
+            return
+            
+        # Đảm bảo chỉ xử lý các gói Broadcast (0xFFFFFFFF)
+        if frame_type != 0xFFFFFFFF:
+            return
+        
+        label = label_bytes.split(b'\x00')[0].decode('utf-8', 'ignore')
+        if ip in self.discovered_ecus: return 
+            
+        # Unpack ZECUFrame_Body_Broadcast_t Header (8 bytes) bắt đầu từ offset 88
+        magicDword, svc_count, pad = struct.unpack_from("<IB3s", data, 88)
+        
+        ecu_item = QStandardItem(f"ZECU: {label}")
+        ecu_item.setData({"ip": ip, "name": label, "port": port}, Qt.UserRole)
+        
+        details_item = QStandardItem(f"IPv4: {ip}:{port} | {svc_count} Services Active")
+        self.model.appendRow([ecu_item, details_item])
+        
+        # Parse Services (mỗi service 64 bytes)
+        offset = 96
+        for _ in range(svc_count):
+            if offset + 64 > len(data): break
+            svc_id, svc_type, svc_acc, svc_desc_bytes = struct.unpack_from("<HHB59s", data, offset)
+            svc_desc = svc_desc_bytes.split(b'\x00')[0].decode('utf-8', 'ignore')
+            
+            s_item = QStandardItem(f"Service: {svc_desc}")
+            s_details = QStandardItem(f"ID: 0x{svc_id:04X} | Type: 0x{svc_type:04X}")
+            ecu_item.appendRow([s_item, s_details])
+            offset += 64
+            
+        self.discovered_ecus[ip] = ecu_item
+        self.tree.expandAll()
+        self.tree.resizeColumnToContents(0)
+        
+    def on_context_menu(self, pos):
+        index = self.tree.indexAt(pos)
+        if not index.isValid(): return
+        
+        # Luôn lấy Item ở cột 0 của dòng được click để trích xuất dữ liệu an toàn
+        col0_index = index.siblingAtColumn(0)
+        item = self.model.itemFromIndex(col0_index)
+        
+        # Chỉ hiện Context Menu nếu click vào dòng ECU gốc (không phải click vào Service)
+        if item.parent() is None:
+            data = item.data(Qt.UserRole)
+            if data is not None:
+                menu = QMenu(self)
+                connect_action = menu.addAction(f"Connect to {data['name']}")
+                action = menu.exec(self.tree.viewport().mapToGlobal(pos))
+                
+                if action == connect_action:
+                    if self.parent():
+                        self.parent().connect_to_ecu(data["ip"], data["name"], data["port"])
+                    self.accept()
+                    
+    def cleanup(self):
+        if self.timer.isActive():
+            self.timer.stop()
+        if self.udp_sock.fileno() != -1:
+            self.udp_sock.close()
+            
+    def accept(self):
+        self.cleanup()
+        super().accept()
+        
+    def reject(self):
+        self.cleanup()
+        super().reject()
+        
+    def closeEvent(self, event):
+        self.cleanup()
+        super().closeEvent(event)
 
 # /* ========================================================================= */
 # /* MAIN GUI APPLICATION                                                      */
@@ -48,6 +197,10 @@ class MyMonitorApp(QMainWindow):
         self.ui.setupUi(self)
         
         # /* Core Registries */
+        self.authenticator = NodeAuth()
+        # Khởi tạo khóa cứng giống với ZECU (0xDEADBEEF)
+        self.authenticator.set_core_key(0xDEADBEEF) 
+        
         self.ecu_registry = {}
         
         # /* ZoneECU Classification Dictionary containing lists */
@@ -73,6 +226,8 @@ class MyMonitorApp(QMainWindow):
         
         self.global_packet_count = 0
         
+        self.keepalive_sync = 0
+        
         # /* GPS state tracking */
         self.last_map_lat = None
         self.last_map_lon = None
@@ -93,6 +248,11 @@ class MyMonitorApp(QMainWindow):
         self.gps_timer.timeout.connect(self.refresh_gps_map)
         self.gps_timer.start(1000)
         
+        # /* Set up a 300ms Keep-Alive timer to prevent ZECU timeout */
+        self.keep_alive_timer = QTimer(self)
+        self.keep_alive_timer.timeout.connect(self.send_keep_alive)
+        self.keep_alive_timer.start(300)
+
         self.udp_thread = UdpListenerThread()
         self.udp_thread.data_received.connect(self.process_incoming_data)
         self.udp_thread.start()
@@ -164,13 +324,199 @@ class MyMonitorApp(QMainWindow):
             self.ui.Visualization_MonitorApp_Status_Copy.clicked.connect(self.on_copy_status_clicked)
 
         # /* Connect menu actions */
-        self.ui.actionClose_app.triggered.connect(self.close)
+        self.ui.ConnectZECU.triggered.connect(self.open_discovery_dialog)
         self.ui.actionGPS_map.triggered.connect(self.show_gps_view)
         self.ui.actionECU_status_graph.triggered.connect(self.show_graph_view)
         
+        # /* Bind the Remove ZECU button to its callback */
+        if hasattr(self.ui, 'pushButton_RemoteZECU'):
+            self.ui.pushButton_RemoteZECU.clicked.connect(self.on_remove_zecu_clicked)
+
         # /* Return from execution */
         return
 
+    # /*
+    #  * @brief Opens the ZECU Discovery UI
+    #  */
+    def open_discovery_dialog(self):
+        self.app_log("Opening ZECU Discovery Dialog...")
+        dialog = DiscoveryDialog(self)
+        dialog.exec()
+        
+    # /*
+    #  * @brief Retrieves the currently selected ECU name from the UI list.
+    #  * @return String name of the ECU, or None if not found/selected.
+    #  */
+    def get_active_ecu_name(self):
+        if hasattr(self.ui, 'ZECU_List'):
+            if hasattr(self.ui.ZECU_List, 'currentItem') and self.ui.ZECU_List.currentItem():
+                return self.ui.ZECU_List.currentItem().text()
+            elif hasattr(self.ui.ZECU_List, 'currentText'):
+                return self.ui.ZECU_List.currentText()
+        return None
+
+    # /*
+    #  * @brief Adds an ECU name to the UI selection list dynamically.
+    #  */
+    def add_ecu_to_ui_list(self, ecu_name):
+        if hasattr(self.ui, 'ZECU_List'):
+            if hasattr(self.ui.ZECU_List, 'addItem'):
+                if hasattr(self.ui.ZECU_List, 'findItems'):
+                    if not self.ui.ZECU_List.findItems(ecu_name, Qt.MatchExactly):
+                        self.ui.ZECU_List.addItem(ecu_name)
+                elif hasattr(self.ui.ZECU_List, 'findText'):
+                    if self.ui.ZECU_List.findText(ecu_name) == -1:
+                        self.ui.ZECU_List.addItem(ecu_name)
+
+    # /*
+    #  * @brief Removes an ECU name from the UI selection list.
+    #  */
+    def remove_ecu_from_ui_list(self, ecu_name):
+        if hasattr(self.ui, 'ZECU_List'):
+            if hasattr(self.ui.ZECU_List, 'findItems'):
+                items = self.ui.ZECU_List.findItems(ecu_name, Qt.MatchExactly)
+                for item in items:
+                    self.ui.ZECU_List.takeItem(self.ui.ZECU_List.row(item))
+            elif hasattr(self.ui.ZECU_List, 'findText'):
+                idx = self.ui.ZECU_List.findText(ecu_name)
+                if idx >= 0:
+                    self.ui.ZECU_List.removeItem(idx)
+
+    # /*
+    #  * @brief Purges an ECU from registries and stops Keep-Alive transmissions.
+    #  */
+    def remove_ecu(self, ecu_name):
+        self.app_log(f"REMOVING ZECU: {ecu_name}")
+        SysInfo("REMOVING ZECU: %s", ecu_name)
+        
+        # /* Remove from zone_ecus to halt Keep-Alive and command routing */
+        for zone in self.zone_ecus:
+            target_list = self.zone_ecus[zone]
+            for ecu in target_list[:]:
+                if ecu.name == ecu_name:
+                    target_list.remove(ecu)
+                    
+        # /* Purge plotting data and lines from Matplotlib */
+        if ecu_name in self.ecu_registry:
+            lines = self.ecu_registry[ecu_name]["lines"]
+            for line_key, line_obj in lines.items():
+                try:
+                    line_obj.remove()
+                except Exception:
+                    pass
+            del self.ecu_registry[ecu_name]
+            
+        # /* Refresh legends safely */
+        try:
+            self.ax1.legend(loc='upper left', fontsize='x-small')
+            self.ax1_twin.legend(loc='upper right', fontsize='x-small')
+            self.ax2.legend(loc='upper left', fontsize='x-small')
+            self.ax3.legend(loc='upper left', fontsize='x-small')
+            self.canvas.draw()
+        except Exception:
+            pass
+
+    # /*
+    #  * @brief Callback invoked when the Remove ZECU button is pressed.
+    #  */
+    def on_remove_zecu_clicked(self):
+        if not hasattr(self.ui, 'ZECU_List'): return
+        
+        removed_any = False
+        if hasattr(self.ui.ZECU_List, 'selectedItems'):
+            items = self.ui.ZECU_List.selectedItems()
+            for item in list(items):
+                ecu_name = item.text()
+                self.remove_ecu(ecu_name)
+                self.remove_ecu_from_ui_list(ecu_name)
+                removed_any = True
+        elif hasattr(self.ui.ZECU_List, 'currentText'):
+            ecu_name = self.ui.ZECU_List.currentText()
+            if ecu_name:
+                self.remove_ecu(ecu_name)
+                self.remove_ecu_from_ui_list(ecu_name)
+                removed_any = True
+                
+        if not removed_any:
+            self.app_log("WARNING: No ZECU selected to remove.")
+        
+    # /*
+    #  * @brief Initiates logic to authenticate and connect to an ECU
+    #  */
+    def connect_to_ecu(self, ecu_ip, ecu_name, port):
+        self.app_log(f"AUTH: Initiating connection to {ecu_name} at {ecu_ip}:{port}...")
+        SysInfo("Initiating connection to %s [%s:%d]", ecu_name, ecu_ip, port)
+        
+        # eFrameType_PairingRequest = 0x55000001, ePairingRequest_New = 0x0FFCC01E
+        body = struct.pack("<BIBBB", 0xAA, 0x0FFCC01E, 0xAA, 0xAA, 0xAA)
+        frame = self.build_zecu_frame(0x55000001, body)
+        
+        self.udp_thread.sock.sendto(frame, (ecu_ip, port))
+        self.app_log(f"AUTH: Sent PairingRequest to {ecu_name}. Waiting for AuthTX...")
+
+    # /*
+    #  * @brief Handles the incoming AuthTX Challenge from a ZECU
+    #  */
+    def handle_auth_tx(self, payload):
+        challenge = payload["challenge"]
+        ecu_ip = payload["ip"]
+        ecu_port = payload["port"]
+        ecu_name = payload["name"]
+        
+        self.app_log(f"AUTH: Received Challenge (0x{challenge:016X}) from {ecu_name}.")
+        
+        try:
+            signature = self.authenticator.sign_challenge(challenge)
+            self.app_log(f"AUTH: Generated Signature (0x{signature:016X}). Sending AuthRX...")
+            
+            # eFrameType_AuthRX = 0xAA00000B
+            body = struct.pack("<BQBBB", 0xAA, signature, 0xAA, 0xAA, 0xAA)
+            frame = self.build_zecu_frame(0xAA00000B, body)
+            
+            self.udp_thread.sock.sendto(frame, (ecu_ip, ecu_port))
+            self.app_log(f"AUTH: Successfully responded AuthRX to {ecu_name}.")
+        except Exception as e:
+            self.app_log(f"AUTH ERROR: {e}")
+            SysErr("AUTH ERROR: %s", str(e))
+            
+    def calc_checksum16(self, data):
+        csum = sum(data)
+        while csum >> 16:
+            csum = (csum & 0xFFFF) + (csum >> 16)
+        return (~csum) & 0xFFFF
+
+    def calc_crc32(self, data):
+        crc = 0xFFFFFFFF
+        for b in data:
+            crc ^= b
+            for _ in range(8):
+                if crc & 1:
+                    crc = (crc >> 1) ^ 0xEDB88320
+                else:
+                    crc >>= 1
+        return crc
+        
+    def build_zecu_frame(self, frame_type, body_data):
+        # Pad body strictly to 520 bytes (ZECUFrame_Body_t Max Size)
+        body = body_data.ljust(520, b'\x00')
+        
+        # Header (88 bytes strictly aligned)
+        header = struct.pack("<BBBB64s6sB4sHBBBI",
+            0xAA, 0x04, 0x55, 0xAA,
+            b"CentralControlUnit",
+            bytes.fromhex("e466e5984fd7"),
+            0xAA, socket.inet_aton("10.0.0.102"), 30490,
+            0xAA, 0xAA, 0xAA,
+            frame_type
+        )
+        
+        payload = header + body # 608 bytes payload
+        csum = self.calc_checksum16(payload)
+        crc = self.calc_crc32(payload) ^ 0xFFFFFFFF
+        
+        trailer = struct.pack("<BHBI", 0xAA, csum, 0x55, crc)
+        return payload + trailer
+        
     # /*
     #  * @brief Verifies active internet connection via DNS port probe.
     #  * @return True if connected, False otherwise.
@@ -354,6 +700,29 @@ class MyMonitorApp(QMainWindow):
         return
 
     # /*
+    #  * @brief Transmits a dedicated Keep-Alive frame every 300ms to maintain connection.
+    #  * Evaluates a rolling sync counter (0 to 3) with the predefined Magic Number.
+    #  */
+    def send_keep_alive(self):
+        body = struct.pack("<BBBB", KEEPALIVE_MAGIC, self.keepalive_sync, KEEPALIVE_MAGIC, KEEPALIVE_MAGIC)
+        payload = self.build_zecu_frame(KEEPALIVE_FRAME_TYPE, body)
+        
+        self.keepalive_sync = (self.keepalive_sync + 1) % 4
+        
+        for zone, ecu_list in self.zone_ecus.items():
+            if not ecu_list:
+                continue
+                
+            for ecu in ecu_list:
+                if ecu is None or not ecu.ip:
+                    continue
+                try:
+                    self.udp_thread.sock.sendto(payload, (ecu.ip, ecu.port))
+                except Exception:
+                    pass
+        return
+
+    # /*
     #  * @brief Initializes the embedded Matplotlib charting environment.
     #  * @details Also configures layouts for the QStackedWidget pages to ensure proper scaling.
     #  */
@@ -431,6 +800,11 @@ class MyMonitorApp(QMainWindow):
     #  * @param payload Dictionary containing extracted payload attributes.
     #  */
     def process_incoming_data(self, payload):
+        msg_type = payload.get("type", "HeartBeat")
+        if msg_type == "AuthTX":
+            self.handle_auth_tx(payload)
+            return
+            
         self.global_packet_count += 1
         ecu_name = payload["name"]
         
@@ -459,11 +833,17 @@ class MyMonitorApp(QMainWindow):
                 if len(ecu_list) >= max_allowed:
                     # /* Branch if auto-replace is enabled */
                     if ALLOW_AUTO_REPACE_ZECU == 1:
-                        oldest_ecu = ecu_list.pop(0)
+                        oldest_ecu = ecu_list[0]
                         self.app_log(f"DROPPED: {ecu_type} Zone -> {oldest_ecu.name} (Auto-replace)")
                         SysInfo("DROPPED: %s Zone -> %s", ecu_type, oldest_ecu.name)
-                        ecu_list.append(ZoneECU(ecu_name, payload["ip"], payload["port"], payload["mac"]))
+                        
+                        # /* Safely purge old ECU before replacing */
+                        self.remove_ecu(oldest_ecu.name)
+                        self.remove_ecu_from_ui_list(oldest_ecu.name)
+                        
+                        self.zone_ecus[ecu_type].append(ZoneECU(ecu_name, payload["ip"], payload["port"], payload["mac"]))
                         self.app_log(f"REGISTERED: {ecu_type} Zone -> {ecu_name}")
+                        self.add_ecu_to_ui_list(ecu_name)
                     else:
                         self.app_log(f"ERROR: Capacity full in {ecu_type} Zone. Dropping {ecu_name}")
                         SysErr("Capacity full in %s Zone. Auto-replace disabled.", ecu_type)
@@ -472,6 +852,7 @@ class MyMonitorApp(QMainWindow):
                 else:
                     ecu_list.append(ZoneECU(ecu_name, payload["ip"], payload["port"], payload["mac"]))
                     self.app_log(f"REGISTERED: {ecu_type} Zone -> {ecu_name}")
+                    self.add_ecu_to_ui_list(ecu_name)
             else:
                 # /* Check if the IP or port has changed to update */
                 if existing_ecu.ip != payload["ip"] or existing_ecu.port != payload["port"]:
@@ -518,6 +899,12 @@ class MyMonitorApp(QMainWindow):
     #  * @brief Updates numeric labels, internal states, and sliders based on telemetry.
     #  */
     def update_gui_elements(self, ecu_name, d0, d1, d2, m0, m1):
+        active_ecu = self.get_active_ecu_name()
+        
+        # /* If a specific ECU is selected, ignore updates from others to prevent UI flickering */
+        if active_ecu and ecu_name != active_ecu:
+            return
+
         SysLog("Updating GUI elements for ECU: %s", ecu_name)
         f_d0 = f"{d0/100:.2f}m"
         f_d1 = f"{d1/100:.2f}m"
@@ -752,10 +1139,14 @@ class MyMonitorApp(QMainWindow):
         SysInfo("ACTION: System %s command initiated.", state_str)
         payload = CCUCommandBuilder.build_sys_ctrl(self.sys_engine_started)
         
+        active_ecu = self.get_active_ecu_name()
+        
         # /* Loop through registered ECU zones */
         for zone, ecu_list in self.zone_ecus.items():
             # /* Iterate through each ECU in the zone */
             for ecu in ecu_list:
+                if active_ecu and ecu.name != active_ecu:
+                    continue
                 self.UDPSendBack(ecu, payload)
                 
         # /* Return from execution */
@@ -768,12 +1159,17 @@ class MyMonitorApp(QMainWindow):
     def on_forward_clicked(self):
         self.app_log("ACTION: Move Forward command initiated.")
         SysInfo("ACTION: Move Forward command initiated.")
-        payload = CCUCommandBuilder.build_eng_ctrl(100, 100)
+        body = struct.pack("<BBBbBbH", 0xAA, 0, 0xAA, 100, 0xAA, 100, 0)
+        payload = self.build_zecu_frame(0xFF00CC0C, body)
+        
+        active_ecu = self.get_active_ecu_name()
         
         # /* Loop through registered ECUs to broadcast the forward state */
         for zone, ecu_list in self.zone_ecus.items():
             # /* Transmit to every unit in current zone */
             for ecu in ecu_list:
+                if active_ecu and ecu.name != active_ecu:
+                    continue
                 self.UDPSendBack(ecu, payload)
                 
         # /* Return from execution */
@@ -786,12 +1182,17 @@ class MyMonitorApp(QMainWindow):
     def on_backward_clicked(self):
         self.app_log("ACTION: Move Backward command initiated.")
         SysInfo("ACTION: Move Backward command initiated.")
-        payload = CCUCommandBuilder.build_eng_ctrl(-100, -100)
+        body = struct.pack("<BBBbBbH", 0xAA, 0, 0xAA, -100, 0xAA, -100, 0)
+        payload = self.build_zecu_frame(0xFF00CC0C, body)
+        
+        active_ecu = self.get_active_ecu_name()
         
         # /* Loop through registered ECUs to broadcast the backward state */
         for zone, ecu_list in self.zone_ecus.items():
             # /* Transmit to every unit in current zone */
             for ecu in ecu_list:
+                if active_ecu and ecu.name != active_ecu:
+                    continue
                 self.UDPSendBack(ecu, payload)
                 
         # /* Return from execution */
@@ -807,10 +1208,16 @@ class MyMonitorApp(QMainWindow):
         
         val_l = self.motor_states[zone]["L"]
         val_r = self.motor_states[zone]["R"]
-        payload = CCUCommandBuilder.build_eng_ctrl(val_l, val_r)
+        
+        body = struct.pack("<BBBbBbH", 0xAA, 0, 0xAA, val_l, 0xAA, val_r, 0)
+        payload = self.build_zecu_frame(0xFF00CC0C, body)
+        
+        active_ecu = self.get_active_ecu_name()
         
         # /* Loop through targeted ECU list */
         for ecu in ecu_list:
+            if active_ecu and ecu.name != active_ecu:
+                continue
             self.UDPSendBack(ecu, payload)
             
         # /* Return from execution */

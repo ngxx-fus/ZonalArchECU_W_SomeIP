@@ -9,7 +9,7 @@
 ##DEPRECATED##         "StartUp/"
 ##DEPRECATED##         "HeartBeat"
 ##DEPRECATED##     REQUIRES 
-##DEPRECATED##         AppUtils
+##DEPRECATED##         AppBase
 ##DEPRECATED##         AppConfig
 ##DEPRECATED##         AppESPWrap
 ##DEPRECATED##         AppComm
@@ -45,8 +45,9 @@ idf_component_register(
     SRCS ${srcs}
     INCLUDE_DIRS ${include_dirs}
     REQUIRES 
-        AppUtils
+        AppBase
         AppConfig
         AppESPWrap
         AppComm
+        nvs_flash
 )

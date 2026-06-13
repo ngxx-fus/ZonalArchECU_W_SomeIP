@@ -27,14 +27,16 @@ class Ui_MainWindow(object):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
         MainWindow.resize(1404, 802)
-        self.actionClose = QAction(MainWindow)
-        self.actionClose.setObjectName(u"actionClose")
-        self.actionClose_app = QAction(MainWindow)
-        self.actionClose_app.setObjectName(u"actionClose_app")
+        self.ConnectZECU = QAction(MainWindow)
+        self.ConnectZECU.setObjectName(u"ConnectZECU")
+        self.CloseApp = QAction(MainWindow)
+        self.CloseApp.setObjectName(u"CloseApp")
         self.actionGPS_map = QAction(MainWindow)
         self.actionGPS_map.setObjectName(u"actionGPS_map")
         self.actionECU_status_graph = QAction(MainWindow)
         self.actionECU_status_graph.setObjectName(u"actionECU_status_graph")
+        self.actionZECU_List = QAction(MainWindow)
+        self.actionZECU_List.setObjectName(u"actionZECU_List")
         self.centralwidget = QWidget(MainWindow)
         self.centralwidget.setObjectName(u"centralwidget")
         self.Visualization = QGroupBox(self.centralwidget)
@@ -232,10 +234,11 @@ class Ui_MainWindow(object):
 
         self.menubar.addAction(self.menuFile.menuAction())
         self.menubar.addAction(self.menuView.menuAction())
-        self.menuFile.addAction(self.actionClose)
-        self.menuFile.addAction(self.actionClose_app)
+        self.menuFile.addAction(self.ConnectZECU)
+        self.menuFile.addAction(self.CloseApp)
         self.menuView.addAction(self.actionGPS_map)
         self.menuView.addAction(self.actionECU_status_graph)
+        self.menuView.addAction(self.actionZECU_List)
 
         self.retranslateUi(MainWindow)
 
@@ -247,10 +250,11 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         MainWindow.setWindowTitle(QCoreApplication.translate("MainWindow", u"MainWindow", None))
-        self.actionClose.setText(QCoreApplication.translate("MainWindow", u"Open config", None))
-        self.actionClose_app.setText(QCoreApplication.translate("MainWindow", u"Close app", None))
+        self.ConnectZECU.setText(QCoreApplication.translate("MainWindow", u"Connect ZECU", None))
+        self.CloseApp.setText(QCoreApplication.translate("MainWindow", u"Close app", None))
         self.actionGPS_map.setText(QCoreApplication.translate("MainWindow", u"GPS map", None))
         self.actionECU_status_graph.setText(QCoreApplication.translate("MainWindow", u"ECU status graph ", None))
+        self.actionZECU_List.setText(QCoreApplication.translate("MainWindow", u"ZECU List", None))
         self.Visualization.setTitle(QCoreApplication.translate("MainWindow", u"Visualization", None))
         self.Visualization_YourDevice.setTitle(QCoreApplication.translate("MainWindow", u"YourDevice", None))
         self.Visualization_Back_Distance_Sensor_Right.setText(QCoreApplication.translate("MainWindow", u"0.00m", None))

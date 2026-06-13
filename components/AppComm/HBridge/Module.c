@@ -91,36 +91,44 @@ ReturnCode_t EmergencyStop(void) {
 /// @brief Main Motor Control Task
 /// @param arg Task arguments
 void MotorRuntime(void* arg) {
-    SysEntry("AppService_HBridge");
+    SysEntry("MotorRuntime");
     
+    while(1 >= GlobalInit_GetLevel()){vTaskDelay(pdMS_TO_TICKS(50));}
+
     /* initialize mutex before creating motor object */
     MotorLock = xSemaphoreCreateMutex();
     
-    SysLog("[AppService_HBridge] New motor object...");
+    SysLog("[MotorRuntime] New motor object...");
     Motor = HBridge_Create(PIN_B_DC_IN0, PIN_B_DC_IN1, PIN_B_DC_IN2, PIN_B_DC_IN3);
     
     if (IsNull(Motor)) {
-        SysErr("[AppService_HBridge] Cannot initialize `Motor`!");
+        SysErr("[MotorRuntime] Cannot initialize `Motor`!");
         vTaskDelete(NULL);
         return;
     }
 
-    SysLog("[AppService_HBridge] Join forever loop...");
+    MotorSetSpeed0(0);
+    MotorSetSpeed1(0);
+    HBridge_Apply(Motor);
+
+    GlobalInit_MoveNextLevel();
+
+    SysLog("[MotorRuntime] Join forever loop...");
     while (1) {
         /* If ECU is in emergency state, block task from applying any further settings */
-        if (IsEmergencyStopped) {
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            continue;
-        }
+        // if (IsEmergencyStopped) {
+        //     vTaskDelay(pdMS_TO_TICKS(1000));
+        //     continue;
+        // }
 
         /* check and apply flags if any changes detected */
-        if (xSemaphoreTake(MotorLock, pdMS_TO_TICKS(10)) == pdTRUE) {
+        if (xSemaphoreTake(MotorLock, pdMS_TO_TICKS(50)) == pdTRUE) {
             if (Motor->Flag != 0) {
                 HBridge_Apply(Motor);
             }
             xSemaphoreGive(MotorLock);
         }
         
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
 }

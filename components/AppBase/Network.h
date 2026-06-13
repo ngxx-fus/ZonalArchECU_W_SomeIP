@@ -1,7 +1,20 @@
+/* Enforce strict version matching across copied files globally */
+#if defined(VERSION_NETWORK_DEFINITION)
+	/* Control flow: verify exact version match */
+	#if (VERSION_NETWORK_DEFINITION != 0x01)
+		#error "Network definition version mismatch! Expected 0x01."
+	#endif
+#else
+	#define VERSION_NETWORK_DEFINITION 0x01
+#endif
+
 #ifndef __NETWORK_H__
 #define __NETWORK_H__
 
-#include "../__CommonHeaders.h"
+#include "stdint.h"
+#include "stdarg.h"
+#include "CString64.h"
+#include "ReturnType.h"
 
 /* NETWORK DEFINITION ***********************************************************************************************************/
 
@@ -64,7 +77,7 @@ typedef union EthMACAddr_t {
 /// @brief IPv4 Address structure for flexible access as a 32-bit word or 4 individual bytes
 typedef union IPv4Addr_t {
     uint32_t Dword;             ///< 32-bit unsigned int32_t
-    uint8_t Byte[4];            ///< 8-bit unsigned array
+    uint8_t  Byte[4];            ///< 8-bit unsigned array
 } IPv4Addr_t;
 
 /// @brief Type of a IPv4 port
@@ -102,7 +115,6 @@ typedef union IPv4Packet_t {
 } IPv4Packet_t;
 
 #endif /*__SYSTEM_DEF_TYPE_NETWORK__*/
-
 
 /* GENERIC PAYLOAD UTILS *********************************************************************************************************/
 

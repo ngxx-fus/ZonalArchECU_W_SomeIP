@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #ifdef PRINT_HEADER_COMPILE_MESSAGE
-#pragma message ("AppUtils/BitOp.h")
+#pragma message ("AppBase/BitOp.h")
 #endif
 
 

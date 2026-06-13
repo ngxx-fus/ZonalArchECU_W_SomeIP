@@ -1,0 +1,84 @@
+General:
+  StartGeneratedSection: "/// GENERATED SECTION | BEGIN /////////////////////////////////////////////////"
+  StopGeneratedSection: "/// GENERATED SECTION | END   /////////////////////////////////////////////////"
+
+PatchPath:
+  Comm:   
+    folder:         "./Comm/"
+    source_def:     "Comm.c.def"
+    header_def:     "Comm.h.def"
+    source:         "Comm.c"
+    header:         "Comm.h"
+  Pinout:
+    folder:         "./Pinout/"
+    source_def:     NONE
+    header_def:     "Pinout.h.def"
+    source:         NONE
+    header:         "Pinout.h"
+
+ZECU:
+  Pinout:
+    DC_Motor:
+      IN0: { Macro: "PIN_B_DC_IN0", Type: UInt, Value: 4 }
+      IN1: { Macro: "PIN_B_DC_IN1", Type: UInt, Value: 16 }
+      IN2: { Macro: "PIN_B_DC_IN2", Type: UInt, Value: 17 }
+      IN3: { Macro: "PIN_B_DC_IN3", Type: UInt, Value: 2 }
+      
+    Eth_W5500:
+      MOSI: { Macro: "PIN_W5500_MOSI", Type: UInt, Value: 13 }
+      MISO: { Macro: "PIN_W5500_MISO", Type: UInt, Value: 12 }
+      CLK:  { Macro: "PIN_W5500_CLK",  Type: UInt, Value: 14 }
+      SCS:  { Macro: "PIN_W5500_SCS",  Type: UInt, Value: 15 }
+      INT:  { Macro: "PIN_W5500_INT",  Type: UInt, Value: 26 }
+      RST:  { Macro: "PIN_W5500_RST",  Type: UInt, Value: 27 }
+      
+    UltraSonic:
+      TRIG:   { Macro: "PIN_US_TRIG",   Type: UInt, Value: 25 }
+      ECHO_L: { Macro: "PIN_US_L_ECHO", Type: UInt, Value: 34 }
+      ECHO_C: { Macro: "PIN_US_C_ECHO", Type: UInt, Value: 35 }
+      ECHO_R: { Macro: "PIN_US_R_ECHO", Type: UInt, Value: 32 }
+
+  Network:
+    Gateway:
+      IPv4: 
+        Macro: "GW_IP_ADDR"
+        Type: IPv4
+        Value: "10.0.0.1"
+      MAC: 
+        Type: MAC
+        Value: "NONE"
+      Subnet: 
+        Macro: "SUBNET_MASK"
+        Type: IPv4
+        Value: "255.255.255.0"
+        
+    CCU:
+      IPv4: 
+        Macro: "CCU_IPV4_ADDR"
+        Type: IPv4
+        Value: "10.0.0.102"
+      Port: 
+        Macro: "CCU_IPV4_PORT"
+        Type: Port
+        Value: 30490
+      MAC: 
+        Type: MAC
+        Value: "NONE"
+        
+    ZECU:
+      Name:
+        Macro: "ECU_NAME"
+        Type: String
+        Value: "Front-ZECU"
+      IPv4: 
+        Macro: "SRC_IP_ADDR"
+        Type: IPv4
+        Value: "10.0.0.58"
+      Port: 
+        Macro: "DEFAULT_PORT"
+        Type: Port
+        Value: 51786
+      MAC: 
+        Macro: "SRC_MAC_ADDR"
+        Type: MAC
+        Value: "58:32:01:DC:08:00"

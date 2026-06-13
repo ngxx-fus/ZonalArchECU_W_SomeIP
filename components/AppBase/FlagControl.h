@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #ifdef PRINT_HEADER_COMPILE_MESSAGE
-#pragma message ("AppUtils/FlagControl.h")
+#pragma message ("AppBase/FlagControl.h")
 #endif
 
 /// Standard input/output definitions

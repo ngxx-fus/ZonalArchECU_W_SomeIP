@@ -49,12 +49,15 @@ ReturnCode_t Eth_SetRxCallback(Eth_RxCallback_t cb);
 ReturnCode_t Eth_SetResponseFunction(Eth_ResponseFunction_t EthResponseFunction);
 
 /* Logging utilities */
-void W5500_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, GenericPtr_t DstMAC);
-void W5500_LogUDPInfo(PacketSlot_t* pkt);
+void Eth_LogFrame(GenericPtr_t Data, EthSize_t Size, GenericPtr_t SrcMAC, GenericPtr_t DstMAC);
+void Eth_LogUDPInfo(PacketSlot_t* pkt);
 
 ReturnCode_t Eth_SendUDPPacket(uint32_t IPv4Address, uint16_t IPv4Port, uint8_t* UDP_Payload, uint16_t PayloadSize);
 
 /*Runtime service*/
-void W5500CommRuntime(void* arg);
+void Eth_Runtime(void* arg);
+
+/* Module Lifecycle API */
+ReturnCode_t Eth_InitializeStatus(void);
 
 #endif ///__ETHERNET_W5500_MODULE_H__

@@ -5,10 +5,6 @@
 extern "C" {
 #endif
 
-#ifdef PRINT_HEADER_COMPILE_MESSAGE
-#pragma message ("AppUtils/All.h")
-#endif
-
 #include <stdio.h>              /// for printf-like formatting
 #include <stdarg.h>             /// for variadic macros
 #include <stdint.h>             /// fixed-width integer types (uint8_t, int32_t, etc.)
@@ -24,6 +20,11 @@ extern "C" {
 #include "./FlagControl.h"
 #include "./Loop.h"
 #include "./Deque.h"
+#include "./CString.h"
+#include "./CString64.h"
+#include "./AppFrame.h"
+#include "./Network.h"
+#include "./GlobalInit.h"
 
 #ifdef __cplusplus
 }

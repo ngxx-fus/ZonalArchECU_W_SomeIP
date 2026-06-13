@@ -37,20 +37,27 @@ FILE_MAIN="${WORKSPACE}MonitorMain.py"
 ## @brief Main execution routine.
 ## @details Validates file existence, converts the UI layout, and launches the monitor application.
 function main() {
-    # Step 1: Validate and compile the UI file
-    if [[ -f "$FILE_UI" ]]; then
-        echo "Compiling UI: $FILE_UI -> $FILE_UI_CONVERTED_PYTHON"
-        "$UIC" "$FILE_UI" -o "$FILE_UI_CONVERTED_PYTHON"
-        
-        # Check the exit status of the compiler
-        if [[ $? -ne 0 ]]; then
-            echo "Fatal: pyside6-uic compilation failed."
-            exit 1
+    # Step 1: Validate and compile all UI files dynamically
+    for UI_FILE in "${WORKSPACE}"*.ui; do
+        if [[ -f "$UI_FILE" ]]; then
+            BASENAME=$(basename "$UI_FILE" .ui)
+            
+            # Special mapping for monitor.ui to preserve existing imports
+            if [[ "$BASENAME" == "monitor" ]]; then
+                PY_FILE="${WORKSPACE}monitor_ui.py"
+            else
+                PY_FILE="${WORKSPACE}${BASENAME}.py"
+            fi
+            
+            echo "Compiling UI: $UI_FILE -> $PY_FILE"
+            "$UIC" "$UI_FILE" -o "$PY_FILE"
+            
+            if [[ $? -ne 0 ]]; then
+                echo "Fatal: pyside6-uic compilation failed for $UI_FILE."
+                exit 1
+            fi
         fi
-    else
-        echo "Fatal: Source UI file not found at $FILE_UI"
-        exit 1
-    fi
+    done
 
     # Step 2: Validate and execute the main Python application
     if [[ -f "$FILE_MAIN" ]]; then
