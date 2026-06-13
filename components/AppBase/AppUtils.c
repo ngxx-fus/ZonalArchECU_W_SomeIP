@@ -62,6 +62,57 @@ uint32_t GenerateRandomNumber(uint32_t SeedInput) {
     return last_known_random_state;
 }
 
+/*
+ * @brief Fast linear scaler with explicit offset and strict boundary saturation.
+ * @param InLeft    Start of the input range.
+ * @param InRight   End of the input range.
+ * @param OutLeft   Start of the output range.
+ * @param OutRight  End of the output range.
+ * @param InOffset  Calibration offset added to input before mapping.
+ * @param OutOffset Calibration offset added to output after mapping.
+ * @param InValue   Raw input signal.
+ * @return int16_t  Safely scaled, offset-adjusted, and clamped result.
+ */
+int16_t LinearScale(int16_t InLeft, int16_t InRight, int16_t OutLeft, int16_t OutRight, int16_t InOffset, int16_t OutOffset, int16_t InValue) {
+    
+    /* Control flow: apply input offset and cast to 32-bit to prevent overflow during arithmetic */
+    int32_t x = (int32_t)InValue + InOffset;
+
+    /* Control flow: Pre-clamp input securely to guarantee math safety and cut-off */
+    /* This automatically handles both UP scaling and DOWN (inverted) scaling */
+    if (InLeft < InRight) {
+        if (x <= InLeft) x = InLeft;
+        else if (x >= InRight) x = InRight;
+    } else {
+        if (x >= InLeft) x = InLeft;
+        else if (x <= InRight) x = InRight;
+    }
+
+    int32_t in_range = (int32_t)InRight - InLeft;
+
+    /* Control flow: guard against division by zero for flat constraints */
+    if (in_range == 0) {
+        return (int16_t)(OutLeft + OutOffset);
+    }
+
+    int32_t out_range = (int32_t)OutRight - OutLeft;
+
+    /* Control flow: process linear map using fast 32-bit integer cross-multiplication */
+    int32_t result = (((x - InLeft) * out_range) / in_range) + OutLeft + OutOffset;
+
+    /* Control flow: Post-clamp output to ensure OutOffset doesn't violate thresholds */
+    /* Strict cut-off logic based on the geometric slope of the output bounds */
+    if (OutLeft < OutRight) {
+        if (result <= OutLeft) result = OutLeft;
+        else if (result >= OutRight) result = OutRight;
+    } else {
+        if (result >= OutLeft) result = OutLeft;
+        else if (result <= OutRight) result = OutRight;
+    }
+
+    return (int16_t)result;
+}
+
 #if (ESP_ERR_CONVERT_EN == 1)
     DefaultRet_t ESPReturnType2DefaultReturnType(int32_t espErr) {
         switch (espErr) {

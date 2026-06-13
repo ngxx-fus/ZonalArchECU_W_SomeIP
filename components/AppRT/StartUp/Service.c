@@ -18,16 +18,13 @@
 AppService_t ServiceList[] = {
     /*name*/                /*function ptr*/        		/*Stack Size*//*ParamPtr*//*Priority*/        /*TaskHandle*/	/*Status*/
     [eSERVICE_ETHERNET_RUNTIME] =
-    {"EthRuntime",              Eth_Runtime,     			2048,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
+    {"EthRuntime",              Eth_Runtime,     			3096,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
     [eSERVICE_HEART_BEAT_RUNTIME] =
-    {"HeartBeatRuntime",        HeartBeatRuntime,           2048,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
+    {"HeartBeatRuntime",        HeartBeatRuntime,           3096,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
     [eSERVICE_MORTOR_RUNTIME] =
 	{"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
     [eSERVICE_ULTRA_SONIC_RUNTIME] =
     {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
-    // {"Chaos_Zero",       Dummy0,                 2048,           NULL,       eTask_Normal,       0},
-    // {"Chaos_Max",        Dummy1,                 2048,           NULL,       eTask_Low,          0},
-    // {"Chaos_Jitter",     Dummy_Jitter,           2048,           NULL,       eTask_Background,   0},
 };
 
 /// @brief Initializes and creates tasks for all services defined in ServiceList

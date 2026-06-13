@@ -21,7 +21,7 @@ from MonitorConfig import *
 from monitor_ui import Ui_MainWindow
 from monitor_list_zecu import Ui_Dialog as Ui_ListZECU
 from monitor_auth import NodeAuth
-from CoreNetwork import ZoneECU, CCUCommandBuilder
+from CoreNetwork import ZoneECU
 from UdpListener import UdpListenerThread
 
 # /* ========================================================================= */
@@ -332,10 +332,10 @@ class MyMonitorApp(QMainWindow):
         self.ui.Control_MoveBackward.clicked.connect(self.on_backward_clicked)
         self.ui.Control_EngineSpeed.clicked.connect(self.on_control_combo_speed_set)
         
-        self.ui.Control_Front_Motor_Control_Slider_Left.valueChanged.connect(self.on_slider_front_left_changed)
-        self.ui.Control_Front_Motor_Control_Slider_Right.valueChanged.connect(self.on_slider_front_right_changed)
-        self.ui.Control_Back_Motor_Control_Slider_Left.valueChanged.connect(self.on_slider_back_left_changed)
-        self.ui.Control_Back_Motor_Control_Slider_Right.valueChanged.connect(self.on_slider_back_right_changed)
+        self.ui.Control_Front_Motor_Control_Slider_Left.sliderReleased.connect(self.on_slider_front_left_released)
+        self.ui.Control_Front_Motor_Control_Slider_Right.sliderReleased.connect(self.on_slider_front_right_released)
+        self.ui.Control_Back_Motor_Control_Slider_Left.sliderReleased.connect(self.on_slider_back_left_released)
+        self.ui.Control_Back_Motor_Control_Slider_Right.sliderReleased.connect(self.on_slider_back_right_released)
         
         # /* Verify and connect clear status button if it exists */
         if hasattr(self.ui, 'Visualization_MonitorApp_Status_Clear'):
@@ -809,11 +809,12 @@ class MyMonitorApp(QMainWindow):
         SysLog("Processing incoming packet from ECU: %s", ecu_name)
         
         ecu_type = None
+        ecu_name_lower = ecu_name.lower()
         # /* Check if ECU is classified as Front */
-        if "Front" in ecu_name:
+        if "front" in ecu_name_lower:
             ecu_type = "Front"
         # /* Check if ECU is classified as Back */
-        elif "Back" in ecu_name or "Rear" in ecu_name:
+        elif "back" in ecu_name_lower or "rear" in ecu_name_lower:
             ecu_type = "Back"
             
         # /* Conditional steering to validate ECU assignment */
@@ -908,8 +909,9 @@ class MyMonitorApp(QMainWindow):
         f_d1 = f"{d1/100:.2f}m"
         f_d2 = f"{d2/100:.2f}m"
         
+        ecu_name_lower = ecu_name.lower()
         # /* Evaluate ECU origin to route data to the appropriate UI cluster */
-        if "Front" in ecu_name:
+        if "front" in ecu_name_lower:
             self.motor_states["Front"]["L"] = m0
             self.motor_states["Front"]["R"] = m1
             
@@ -926,7 +928,7 @@ class MyMonitorApp(QMainWindow):
             self.ui.Control_Front_Motor_Control_Slider_Left.blockSignals(False)
             self.ui.Control_Front_Motor_Control_Slider_Right.blockSignals(False)
             
-        elif "Back" in ecu_name or "Rear" in ecu_name:
+        elif "back" in ecu_name_lower or "rear" in ecu_name_lower:
             self.motor_states["Back"]["L"] = m0
             self.motor_states["Back"]["R"] = m1
             
@@ -1060,6 +1062,13 @@ class MyMonitorApp(QMainWindow):
             if update_br: self.motor_states["Back"]["R"] = val
             self._transmit_motor_update("Back", update_l=update_bl, update_r=update_br)
 
+        # /* Reset selection to prevent stuck buttons on next trigger */
+        self.vis_selected = { k: False for k in self.vis_selected }
+        self.ui.Visualization_EngineSelect_FrontLeft.setStyleSheet("")
+        self.ui.Visualization_EngineSelect_FrontRight.setStyleSheet("")
+        self.ui.Visualization_EngineSelect_BackLeft.setStyleSheet("")
+        self.ui.Visualization_EngineSelect_BackRight.setStyleSheet("")
+
         self.app_log(f"VISUALIZATION: Speed updated to {val} for selected engines.")
         
         # /* Return from execution */
@@ -1073,41 +1082,44 @@ class MyMonitorApp(QMainWindow):
         front_sel = self.ui.Control_EngineSelect_Front_2.currentText()
         back_sel = self.ui.Control_EngineSelect_Front.currentText()
 
-        update_fl, update_fr = False, False
-        # /* Evaluate front combobox selection routing */
-        if front_sel == "Front_LR":
-            self.motor_states["Front"]["L"] = val
-            self.motor_states["Front"]["R"] = val
-            update_fl, update_fr = True, True
-        elif front_sel == "Front_L":
-            self.motor_states["Front"]["L"] = val
-            update_fl = True
-        elif front_sel == "Front_R":
-            self.motor_states["Front"]["R"] = val
-            update_fr = True
+        # /* Identify whether the user is modifying Front or Back based on active text */
+        if "Front" in front_sel:
+            update_fl, update_fr = False, False
+            # /* Evaluate front combobox selection routing */
+            if front_sel == "Front_LR":
+                self.motor_states["Front"]["L"] = val
+                self.motor_states["Front"]["R"] = val
+                update_fl, update_fr = True, True
+            elif front_sel == "Front_L":
+                self.motor_states["Front"]["L"] = val
+                update_fl = True
+            elif front_sel == "Front_R":
+                self.motor_states["Front"]["R"] = val
+                update_fr = True
 
-        # /* Transmit data if any front parameters were modified */
-        if update_fl or update_fr:
-            self._transmit_motor_update("Front", update_l=update_fl, update_r=update_fr)
+            # /* Transmit data if any front parameters were modified */
+            if update_fl or update_fr:
+                self._transmit_motor_update("Front", update_l=update_fl, update_r=update_fr)
+                self.app_log(f"CONTROL: Combobox Front Speed updated to {val}.")
 
-        update_bl, update_br = False, False
-        # /* Evaluate back combobox selection routing */
-        if back_sel == "Back_LR":
-            self.motor_states["Back"]["L"] = val
-            self.motor_states["Back"]["R"] = val
-            update_bl, update_br = True, True
-        elif back_sel == "Back_L":
-            self.motor_states["Back"]["L"] = val
-            update_bl = True
-        elif back_sel == "Back_R":
-            self.motor_states["Back"]["R"] = val
-            update_br = True
+        if "Back" in back_sel:
+            update_bl, update_br = False, False
+            # /* Evaluate back combobox selection routing */
+            if back_sel == "Back_LR":
+                self.motor_states["Back"]["L"] = val
+                self.motor_states["Back"]["R"] = val
+                update_bl, update_br = True, True
+            elif back_sel == "Back_L":
+                self.motor_states["Back"]["L"] = val
+                update_bl = True
+            elif back_sel == "Back_R":
+                self.motor_states["Back"]["R"] = val
+                update_br = True
 
-        # /* Transmit data if any back parameters were modified */
-        if update_bl or update_br:
-            self._transmit_motor_update("Back", update_l=update_bl, update_r=update_br)
-
-        self.app_log(f"CONTROL: Combobox Speed updated to {val}.")
+            # /* Transmit data if any back parameters were modified */
+            if update_bl or update_br:
+                self._transmit_motor_update("Back", update_l=update_bl, update_r=update_br)
+                self.app_log(f"CONTROL: Combobox Back Speed updated to {val}.")
         
         # /* Return from execution */
         return
@@ -1122,7 +1134,16 @@ class MyMonitorApp(QMainWindow):
         
         self.app_log(f"ACTION: System {state_str} command initiated.")
         SysInfo("ACTION: System %s command initiated.", state_str)
-        payload = CCUCommandBuilder.build_sys_ctrl(self.sys_engine_started)
+        
+        # /* Route the System Control to valid ZECUFrame payload types */
+        if not self.sys_engine_started:
+            # /* STOP -> Send EmergencyStop frame */
+            body = struct.pack("<BIBHHHBbbBIIBBH", 0xAA, 0xFFFFFFFF, 0xAA, 0, 0, 0, 0xAA, 0, 0, 0xAA, 0, 0, 0xAA, 0xAA, 0)
+            payload = self.build_zecu_frame(0xF0F0F0FA, body) # eFrameType_EmergencyStop
+        else:
+            # /* START -> Send EngineControl3 with zero speed */
+            body = struct.pack("<BBBbBbH", 0xAA, 0, 0xAA, 0, 0xAA, 0, 0)
+            payload = self.build_zecu_frame(0xFF00CC0C, body) # eFrameType_EngineControl3
         
         active_ecu = self.get_active_ecu_name()
         
@@ -1196,23 +1217,31 @@ class MyMonitorApp(QMainWindow):
         val_l = self.motor_states[zone]["L"]
         val_r = self.motor_states[zone]["R"]
         
-        body = struct.pack("<BBBbBbH", 0xAA, 0, 0xAA, val_l, 0xAA, val_r, 0)
-        
-        # /* FrameType mapping based on target motors */
+        # /* Control flow: determine FrameType and dynamically pack body based on target motors */
         if update_l and update_r:
             frame_type = 0xFF00CC0C  # /* eFrameType_EngineControl3 (Both M0 & M1) */
+            # /* Layout: Magic0(B), Sync(B), Magic1(B), M0(b), Magic2(B), M1(b), CheckSum(H) */
+            body = struct.pack("<BBBbBbH", 0xAA, 0, 0xAA, val_l, 0xAA, val_r, 0)
+            
         elif update_l:
             frame_type = 0xFF00CC0A  # /* eFrameType_EngineControl1 (M0 only) */
+            # /* Layout: Magic0(B), Sync(B), Magic1(B), M0(b), Magic2(B), Magic3(B), CheckSum(H) */
+            body = struct.pack("<BBBbBBH", 0xAA, 0, 0xAA, val_l, 0xAA, 0xAA, 0)
+            
         elif update_r:
             frame_type = 0xFF00CC0B  # /* eFrameType_EngineControl2 (M1 only) */
+            # /* Layout: Magic0(B), Sync(B), Magic1(B), M1(b), Magic2(B), Magic3(B), CheckSum(H) */
+            body = struct.pack("<BBBbBBH", 0xAA, 0, 0xAA, val_r, 0xAA, 0xAA, 0)
+            
         else:
+            # /* Control flow: return early if no motors to update */
             return
             
         payload = self.build_zecu_frame(frame_type, body)
         
         active_ecu = self.get_active_ecu_name()
         
-        # /* Loop through targeted ECU list */
+        # /* Control flow: Loop through targeted ECU list */
         for ecu in ecu_list:
             if active_ecu and ecu.name != active_ecu:
                 continue
@@ -1223,9 +1252,9 @@ class MyMonitorApp(QMainWindow):
 
     # /*
     #  * @brief Callback invoked when the Front Left slider is adjusted.
-    #  * @param value The new integer value of the slider.
     #  */
-    def on_slider_front_left_changed(self, value):
+    def on_slider_front_left_released(self):
+        value = self.ui.Control_Front_Motor_Control_Slider_Left.value()
         self.app_log(f"CONTROL: Front Left Motor adjusted to {value}%")
         SysInfo("CONTROL: Front Left Motor adjusted to %d%%", value)
         self.motor_states["Front"]["L"] = value
@@ -1236,9 +1265,9 @@ class MyMonitorApp(QMainWindow):
 
     # /*
     #  * @brief Callback invoked when the Front Right slider is adjusted.
-    #  * @param value The new integer value of the slider.
     #  */
-    def on_slider_front_right_changed(self, value):
+    def on_slider_front_right_released(self):
+        value = self.ui.Control_Front_Motor_Control_Slider_Right.value()
         self.app_log(f"CONTROL: Front Right Motor adjusted to {value}%")
         SysInfo("CONTROL: Front Right Motor adjusted to %d%%", value)
         self.motor_states["Front"]["R"] = value
@@ -1249,9 +1278,9 @@ class MyMonitorApp(QMainWindow):
 
     # /*
     #  * @brief Callback invoked when the Back Left slider is adjusted.
-    #  * @param value The new integer value of the slider.
     #  */
-    def on_slider_back_left_changed(self, value):
+    def on_slider_back_left_released(self):
+        value = self.ui.Control_Back_Motor_Control_Slider_Left.value()
         self.app_log(f"CONTROL: Back Left Motor adjusted to {value}%")
         SysInfo("CONTROL: Back Left Motor adjusted to %d%%", value)
         self.motor_states["Back"]["L"] = value
@@ -1262,9 +1291,9 @@ class MyMonitorApp(QMainWindow):
 
     # /*
     #  * @brief Callback invoked when the Back Right slider is adjusted.
-    #  * @param value The new integer value of the slider.
     #  */
-    def on_slider_back_right_changed(self, value):
+    def on_slider_back_right_released(self):
+        value = self.ui.Control_Back_Motor_Control_Slider_Right.value()
         self.app_log(f"CONTROL: Back Right Motor adjusted to {value}%")
         SysInfo("CONTROL: Back Right Motor adjusted to %d%%", value)
         self.motor_states["Back"]["R"] = value

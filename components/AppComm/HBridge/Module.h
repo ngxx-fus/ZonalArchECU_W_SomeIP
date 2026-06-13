@@ -12,6 +12,12 @@ extern SemaphoreHandle_t    MotorLock;    /* Mutex for synchronized motor access
 
 /* --- INTER-COMMUNICATION FUNCTIONS --- */
 
+/// @brief 
+/// @param Speed0 
+/// @param Speed1 
+/// @return 
+ReturnCode_t MotorSetSpeed(int16_t Speed0, int16_t Speed1);
+
 /// @brief Set speed for Motor 0 (Channel A)
 /// @param Speed Target speed value (-1023 to 1023)
 /// @return ReturnCode_t STAT_OKE if successful

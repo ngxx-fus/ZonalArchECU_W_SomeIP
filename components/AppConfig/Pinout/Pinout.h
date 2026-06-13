@@ -33,9 +33,9 @@ enum PIN_STATE_e {
 
 /// GENERATED SECTION | BEGIN /////////////////////////////////////////////////
 #define PIN_B_DC_IN0              ((Pin_t)4)
-#define PIN_B_DC_IN1              ((Pin_t)16)
-#define PIN_B_DC_IN2              ((Pin_t)17)
-#define PIN_B_DC_IN3              ((Pin_t)2)
+#define PIN_B_DC_IN1              ((Pin_t)2)
+#define PIN_B_DC_IN2              ((Pin_t)16)
+#define PIN_B_DC_IN3              ((Pin_t)17)
 #define PIN_W5500_MOSI            ((Pin_t)13)
 #define PIN_W5500_MISO            ((Pin_t)12)
 #define PIN_W5500_CLK             ((Pin_t)14)

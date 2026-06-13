@@ -184,9 +184,9 @@ typedef struct __attribute__((packed)) {
     uint8_t            SyncCtrlNum;
     uint8_t            Magic1;
     int8_t             M0;
-    uint16_t           CheckSum16;
     uint8_t            Magic2;
     uint8_t            Magic3;
+    uint16_t           CheckSum16;
 } ZECUFrame_Body_EngineControl1_t;
 
 /* Total size: 8 bytes (Padded +2 bytes) */
@@ -195,9 +195,9 @@ typedef struct __attribute__((packed)) {
     uint8_t            SyncCtrlNum;
     uint8_t            Magic1;
     int8_t             M1;
-    uint16_t           CheckSum16;
     uint8_t            Magic2;
     uint8_t            Magic3;
+    uint16_t           CheckSum16;
 } ZECUFrame_Body_EngineControl2_t;
 
 /* Total size: 8 bytes */

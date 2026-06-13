@@ -10,7 +10,7 @@
 typedef uint16_t    CBuffSize_t;
 typedef void* CBuffBase_t;
 
-#define CBUFFER_MAX_SIZE   128U
+#define CBUFFER_MAX_SIZE   (256U)
 
 /// @brief Generic element stored inside buffer
 ///

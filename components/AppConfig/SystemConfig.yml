@@ -20,9 +20,9 @@ ZECU:
   Pinout:
     DC_Motor:
       IN0: { Macro: "PIN_B_DC_IN0", Type: UInt, Value: 4 }
-      IN1: { Macro: "PIN_B_DC_IN1", Type: UInt, Value: 16 }
-      IN2: { Macro: "PIN_B_DC_IN2", Type: UInt, Value: 17 }
-      IN3: { Macro: "PIN_B_DC_IN3", Type: UInt, Value: 2 }
+      IN1: { Macro: "PIN_B_DC_IN1", Type: UInt, Value: 2 }
+      IN2: { Macro: "PIN_B_DC_IN2", Type: UInt, Value: 16 }
+      IN3: { Macro: "PIN_B_DC_IN3", Type: UInt, Value: 17 }
       
     Eth_W5500:
       MOSI: { Macro: "PIN_W5500_MOSI", Type: UInt, Value: 13 }
@@ -81,4 +81,4 @@ ZECU:
       MAC: 
         Macro: "SRC_MAC_ADDR"
         Type: MAC
-        Value: "58:32:01:DC:08:00"
+        Value: "3c:8a:1f:a2:c7:24" # "58:32:01:DC:08:00"

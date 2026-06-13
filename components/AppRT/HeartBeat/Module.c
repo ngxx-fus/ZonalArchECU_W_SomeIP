@@ -61,11 +61,38 @@ static uint64_t last_challenge = 0;
 /* Timestamp of the last valid Keep-Alive received from CCU */
 static volatile TickType_t last_keepalive_time = 0;
 
+/* --- ARITHMETIC  UTILITIES --- */
+
+int16_t ConvertRaw2Percent(int16_t raw_val) {
+    /* Control flow: route to the first segment if the raw value is below or equal to the center breakpoint */
+    if (raw_val <= 300 && raw_val >= (-300)){
+        return 0;
+    }
+    if (raw_val <= 300) {
+        /* Control flow: return scaled value mapped from negative raw range to negative percentage */
+        return LinearScale(-1024, -300, -100, 0, 0, 0, raw_val);
+    } 
+    else {
+        /* Control flow: return scaled value mapped from positive raw range to positive percentage */
+        return LinearScale(300, 1024, 0, 100, 0, 0, raw_val);
+    }
+}
+
+int16_t ConvertPercent2Raw(int16_t percent_val) {
+    if(percent_val == 0) return 0;
+    /* Control flow: route to the first segment if the percentage is below or equal to zero */
+    if (percent_val <= 0) {
+        /* Control flow: return scaled value mapped from negative percentage to negative raw range */
+        return LinearScale(-100, 0, -1024, -300, 0, 0, percent_val);
+    } 
+    else {
+        /* Control flow: return scaled value mapped from positive percentage to positive raw range */
+        return LinearScale(0, 100, 300, 1024, 0, 0, percent_val);
+    }
+}
+
 /* --- NVS STORAGE UTILITIES --- */
 
-/**
- * @brief Saves the current CCU endpoint to Non-Volatile Storage
- */
 static void NVS_SaveCCUEndpoint(void) {
     nvs_handle_t my_handle;
     esp_err_t err = nvs_open("storage", NVS_READWRITE, &my_handle);
@@ -77,10 +104,6 @@ static void NVS_SaveCCUEndpoint(void) {
     }
 }
 
-/**
- * @brief Loads the CCU endpoint from Non-Volatile Storage on boot
- * @return true if loaded successfully, false otherwise
- */
 static bool NVS_LoadCCUEndpoint(void) {
     nvs_handle_t my_handle;
     esp_err_t err = nvs_open("storage", NVS_READONLY, &my_handle);
@@ -99,9 +122,6 @@ static bool NVS_LoadCCUEndpoint(void) {
     return false;
 }
 
-/**
- * @brief Erases the saved CCU endpoint from Non-Volatile Storage
- */
 static void NVS_EraseCCUEndpoint(void) {
     nvs_handle_t my_handle;
     if (nvs_open("storage", NVS_READWRITE, &my_handle) == ESP_OK) {
@@ -180,19 +200,21 @@ void ParsePacket(PacketSlot_t* pkt){
         }
     }
     else if(Fr->Header.FrameType == eFrameType_EngineControl1){
-        SysLog("ParsePacket(...): Speed0=%d", Fr->Body.EngineControl3.M0);
-        MotorSetSpeed0(Fr->Body.EngineControl1.M0);
+        SysLog("ParsePacket(...): Speed0=%d", Fr->Body.EngineControl1.M0);
+        MotorSetSpeed0(ConvertPercent2Raw(Fr->Body.EngineControl1.M0));
         Eth_RequestResponseNow();
     }
     else if(Fr->Header.FrameType == eFrameType_EngineControl2){
-        SysLog("ParsePacket(...): Speed1=%d", Fr->Body.EngineControl3.M1);
-        MotorSetSpeed1(Fr->Body.EngineControl2.M1);
+        SysLog("ParsePacket(...): Speed1=%d", Fr->Body.EngineControl2.M1);
+        MotorSetSpeed1(ConvertPercent2Raw(Fr->Body.EngineControl2.M1));
         Eth_RequestResponseNow();
     }
     else if(Fr->Header.FrameType == eFrameType_EngineControl3){
         SysLog("ParsePacket(...): Speed0=%d, Speed1=%d", Fr->Body.EngineControl3.M0, Fr->Body.EngineControl3.M1);
-        MotorSetSpeed0(Fr->Body.EngineControl3.M0);
-        MotorSetSpeed1(Fr->Body.EngineControl3.M1);
+        MotorSetSpeed(
+            ConvertPercent2Raw(Fr->Body.EngineControl3.M0),
+            ConvertPercent2Raw(Fr->Body.EngineControl3.M1)
+        );
         Eth_RequestResponseNow();
     }
     else if(Fr->Header.FrameType == eFrameType_EmergencyStop){
@@ -200,10 +222,6 @@ void ParsePacket(PacketSlot_t* pkt){
     }
 }
 
-/*
-* @brief Application-level Ethernet Rx Callback.
-* @param pkt Pointer to the received packet slot.
-*/
 void App_EthernetRxCallback(PacketSlot_t* pkt) {
     /* 1. Ignore if packet pointer is invalid */
     if (pkt == NULL) {
@@ -220,8 +238,6 @@ void App_EthernetRxCallback(PacketSlot_t* pkt) {
     /* 4. Parse the received packet using the updated ZECU Frame protocol */
     ParsePacket(pkt);
 }
-
-extern int32_t ConvertRawToPercent(int32_t rawValue);
 
 void App_SendImmediateHeartbeat(void) {
     ZECUFrame_Generic_t tx_frame;
@@ -240,8 +256,8 @@ void App_SendImmediateHeartbeat(void) {
     uint16_t dist2_cm = (dist2_mm != 0xFFFFU) ? (dist2_mm / 10U) : 0x3FF;
 
     /* Read latest motor speeds and convert */
-    int32_t m0 = ConvertRawToPercent(MotorGetSpeed0());
-    int32_t m1 = ConvertRawToPercent(MotorGetSpeed1());
+    int32_t m0 = ConvertRaw2Percent(MotorGetSpeed0());
+    int32_t m1 = ConvertRaw2Percent(MotorGetSpeed1());
 
     App_WriteFrame_HeartBeat(&tx_frame, sync_num_immediate, dist0_cm, dist1_cm, dist2_cm, (int8_t)m0, (int8_t)m1, 0, 0);
 
@@ -391,7 +407,7 @@ void HeartBeatRuntime(void* arg) {
     if (NVS_LoadCCUEndpoint()) {
         App_HeartBeat_State = eSTATE_CONNECTED;
         last_keepalive_time = xTaskGetTickCount();
-        SysLog("HeartBeatRuntime: Restored previous CCU connection from NVS.");
+        SysLog("HeartBeatRuntime(...): Restored previous CCU connection from NVS.");
     }
 
     /* Infinite loop to periodically process and dispatch heartbeat frames */
@@ -399,7 +415,7 @@ void HeartBeatRuntime(void* arg) {
         /* --- HARDWARE RESET TRIGGER --- */
         /* Check if BOOT button is pressed (Active LOW) */
         if (gpio_get_level(BOOT_BUTTON_PIN) == 0) {
-            SysLog("HeartBeatRuntime: BOOT Button pressed! Forcing network reset...");
+            SysLog("HeartBeatRuntime(...): BOOT Button pressed! Forcing network reset...");
             NVS_EraseCCUEndpoint();
             App_HeartBeat_State = eSTATE_BROADCAST;
             vTaskDelay(pdMS_TO_TICKS(500)); /* Simple debounce delay */
@@ -417,7 +433,7 @@ void HeartBeatRuntime(void* arg) {
         if (App_HeartBeat_State == eSTATE_CONNECTED) {
 #ifndef DISABLE_KEEPALIVE_TRACK
             if ((xTaskGetTickCount() - last_keepalive_time) > pdMS_TO_TICKS(CCU_KEEPALIVE_TIMEOUT_MS)) {
-                SysErr("HeartBeatRuntime: CCU Keep-Alive Timeout (> %d ms)! Reverting to Broadcast.", CCU_KEEPALIVE_TIMEOUT_MS);
+                SysErr("HeartBeatRuntime(...): CCU Keep-Alive Timeout (> %d ms)! Reverting to Broadcast.", CCU_KEEPALIVE_TIMEOUT_MS);
                 App_HeartBeat_State = eSTATE_BROADCAST;
                 continue;
             }
@@ -448,26 +464,30 @@ void HeartBeatRuntime(void* arg) {
             /* --- FAIL-SAFE CHECK --- */
             /* Check if any sensor distance is below the emergency threshold */
             if (dist0_cm < SF_ETT_Distance[0]) {
-                SysErr("HeartBeatRuntime: EMERGENCY! Sensor 0 distance (%u cm) is below threshold (%u cm).", dist0_cm, SF_ETT_Distance[0]);
+                SysErr("HeartBeatRuntime(...): EMERGENCY! Sensor 0 distance (%u cm) is below threshold (%u cm).", dist0_cm, SF_ETT_Distance[0]);
                 EmergencyStop();
             }
             
             /* Check if sensor 1 is below threshold */
             if (dist1_cm < SF_ETT_Distance[1]) {
-                SysErr("HeartBeatRuntime: EMERGENCY! Sensor 1 distance (%u cm) is below threshold (%u cm).", dist1_cm, SF_ETT_Distance[1]);
+                SysErr("HeartBeatRuntime(...): EMERGENCY! Sensor 1 distance (%u cm) is below threshold (%u cm).", dist1_cm, SF_ETT_Distance[1]);
                 EmergencyStop();
             }
             
             /* Check if sensor 2 is below threshold */
             if (dist2_cm < SF_ETT_Distance[2]) {
-                SysErr("HeartBeatRuntime: EMERGENCY! Sensor 2 distance (%u cm) is below threshold (%u cm).", dist2_cm, SF_ETT_Distance[2]);
+                SysErr("HeartBeatRuntime(...): EMERGENCY! Sensor 2 distance (%u cm) is below threshold (%u cm).", dist2_cm, SF_ETT_Distance[2]);
                 EmergencyStop();
             }
         }
 
         /* Scale actual motor speeds from 0~1024 to -100~100 */
-        int32_t m0 = ConvertRawToPercent(MotorGetSpeed0());
-        int32_t m1 = ConvertRawToPercent(MotorGetSpeed1());
+        int32_t m0 = MotorGetSpeed0();
+        int32_t m1 = MotorGetSpeed1();
+        /// SysLog("HeartBeatRuntime(...): m0=%d, m0=%d", m0, m1);
+        m0 = ConvertRaw2Percent(m0);
+        m1 = ConvertRaw2Percent(m1);
+        /// SysLog("HeartBeatRuntime(...): Adjusted, m0=%d, m0=%d", m0, m1);
 
         /* 2. Pack the retrieved information into the generic frame structure */
         App_WriteFrame_HeartBeat(&tx_frame, sync_num, dist0_cm, dist1_cm, dist2_cm, (int8_t)m0, (int8_t)m1, 0, 0);
@@ -479,10 +499,10 @@ void HeartBeatRuntime(void* arg) {
         
         /* Evaluate the transmission status and log the outcome */
         if (ret == STAT_OKE) {
-            SysLog("HeartBeatRuntime: Sent ECU State -> D0: %u, D1: %u, D2: %u, M0: %d, M1: %d, SyncNum: %u", 
+            SysLog("HeartBeatRuntime(...): Sent ECU State -> D0: %u, D1: %u, D2: %u, M0: %d, M1: %d, SyncNum: %u", 
                 dist0_cm, dist1_cm, dist2_cm, m0, m1, (sync_num - 1) & 0x03);
         } else {
-            SysErr("HeartBeatRuntime: Failed to send ECU State! Error: %d", ret);
+            SysErr("HeartBeatRuntime(...): Failed to send ECU State! Error: %d", ret);
         }
 
         /* 4. Suspend task execution for the defined cycle duration */

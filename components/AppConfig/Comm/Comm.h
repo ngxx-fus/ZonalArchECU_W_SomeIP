@@ -53,9 +53,9 @@ extern const Byte_t SRC_IP_ADDR[];
 #define DEFAULT_PORT_HEX 0xCA4A
 extern const Word_t DEFAULT_PORT;
 
-#define SRC_MAC_ADDR_STR "58:32:01:DC:08:00"
-#define SRC_MAC_ADDR_HEX 0x583201DC0800
-#define SRC_MAC_ADDR_INITIALIZER {0x58, 0x32, 0x01, 0xDC, 0x08, 0x00}
+#define SRC_MAC_ADDR_STR "3c:8a:1f:a2:c7:24"
+#define SRC_MAC_ADDR_HEX 0x3C8A1FA2C724
+#define SRC_MAC_ADDR_INITIALIZER {0x3c, 0x8a, 0x1f, 0xa2, 0xc7, 0x24}
 extern const Byte_t SRC_MAC_ADDR[];
 
 /// GENERATED SECTION | END   /////////////////////////////////////////////////

@@ -67,6 +67,19 @@ extern "C" {
 /// @return A pseudo-random integer in the range [0, 9999] (or customized range).
 uint32_t GenerateRandomNumber(uint32_t SeedInput);
 
+/*
+ * @brief Fast linear scaler with explicit offset and strict boundary saturation.
+ * @param InLeft    Start of the input range.
+ * @param InRight   End of the input range.
+ * @param OutLeft   Start of the output range.
+ * @param OutRight  End of the output range.
+ * @param InOffset  Calibration offset added to input before mapping.
+ * @param OutOffset Calibration offset added to output after mapping.
+ * @param InValue   Raw input signal.
+ * @return int16_t  Safely scaled, offset-adjusted, and clamped result.
+ */
+int16_t LinearScale(int16_t InLeft, int16_t InRight, int16_t OutLeft, int16_t OutRight, int16_t InOffset, int16_t OutOffset, int16_t InValue);
+
 #ifdef __cplusplus
 }
 #endif
