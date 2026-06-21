@@ -9,6 +9,16 @@
 volatile uint32_t Loc_Long = 106660172; // Default to HCMC Longitude
 volatile uint32_t Loc_Lat  = 10762622;  // Default to HCMC Latitude
 
+#ifndef LOC_LOG_EN
+    #define LOC_LOG_EN 0
+#endif
+
+#if (LOC_LOG_EN == 1)
+    #define LocLog(...)         SysLog(__VA_ARGS__)
+#else 
+    #define LocLog(...)
+#endif
+
 static uint32_t NmeaToMicroDegrees(const char* str) {
     uint32_t degrees = 0, minutes_int = 0, minutes_frac = 0, frac_divisor = 1;
     const char* dot = strchr(str, '.');
@@ -85,7 +95,7 @@ ReturnCode_t Loc_Init() {
     if (uart_driver_install(LOC_UART_NUM, LOC_BUF_SIZE * 2, 0, 0, NULL, 0) != ESP_OK) return STAT_ERR;
     uart_param_config(LOC_UART_NUM, &uart_config);
     uart_set_pin(LOC_UART_NUM, PIN_LOC_TXD, PIN_LOC_RXD, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    SysLog("Loc_Init: ATGM336H UART%d initialized on TX:%d RX:%d", LOC_UART_NUM, PIN_LOC_TXD, PIN_LOC_RXD);
+    LocLog("Loc_Init: ATGM336H UART%d initialized on TX:%d RX:%d", LOC_UART_NUM, PIN_LOC_TXD, PIN_LOC_RXD);
     SysExit("Loc_Init");
     return STAT_OKE;
 }
@@ -105,13 +115,13 @@ ReturnCode_t Loc_ReadLocation() {
             char* end = strpbrk(start, "\r\n");
             if (end) {
                 *end = '\0';
-                SysLog("Loc_ReadLocation(...): GPS NMEA: %s", start);
+                LocLog("Loc_ReadLocation(...): GPS NMEA: %s", start);
                 
                 uint32_t temp_long = 0, temp_lat = 0;
                 if (ParseLocation(start, &temp_long, &temp_lat) == STAT_OKE) {
                     Loc_Long = temp_long;
                     Loc_Lat  = temp_lat;
-                    SysLog("Loc_ReadLocation(...): GPS Parsed Successfully: Lat=%u, Lon=%u", Loc_Lat, Loc_Long);
+                    LocLog("Loc_ReadLocation(...): GPS Parsed Successfully: Lat=%u, Lon=%u", Loc_Lat, Loc_Long);
                     found = true;
                 }
                 start = strstr(end + 1, "$G");

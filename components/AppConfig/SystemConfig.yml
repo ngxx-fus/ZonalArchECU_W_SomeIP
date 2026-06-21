@@ -74,10 +74,12 @@ ZECU:
         Macro: "ECU_NAME"
         Type: String
         Value: "Front-ZECU"
+        # Value: "Back-ZECU"
       IPv4: 
         Macro: "SRC_IP_ADDR"
         Type: IPv4
         Value: "10.0.0.58"
+        # Value: "10.0.0.47"
       Port: 
         Macro: "DEFAULT_PORT"
         Type: Port
@@ -85,4 +87,5 @@ ZECU:
       MAC: 
         Macro: "SRC_MAC_ADDR"
         Type: MAC
-        Value: "3c:8a:1f:a2:c7:24" # "58:32:01:DC:08:00"
+        Value: "b4:bf:e9:33:e0:6c"
+        # Value: "3c:8a:1f:a2:c7:49"

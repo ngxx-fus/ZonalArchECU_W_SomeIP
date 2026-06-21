@@ -7,6 +7,10 @@
 #include "nvs.h"
 #include "driver/gpio.h"
 
+#ifndef CCU_CONNECT_AUTH_TIMEOUT_MS
+    #define CCU_CONNECT_AUTH_TIMEOUT_MS (10000U)
+#endif
+
 /* Macro to disable Keep-Alive tracking for testing purposes */
 #define DISABLE_KEEPALIVE_TRACK
 
@@ -30,7 +34,6 @@ typedef uint8_t App_HeartBeat_State_t;
 /* Internal variable tracking the current connection state */
 volatile static App_HeartBeat_State_t App_HeartBeat_State = (App_HeartBeat_State_t)eSTATE_BROADCAST;
 volatile static IPv4EndPoint_t        CCU_EP;
-
 
 /* ZECU_Frame_Header*/
 ZECUFrame_Header_t ZECU_Frame_Header = {
@@ -156,7 +159,7 @@ void ParsePacket(PacketSlot_t* pkt){
     /* 2. Process Pairing Requests (Monitor sent ePairingRequest_New) */
     if (Fr->Header.FrameType == eFrameType_PairingRequest) {
         if (Fr->Body.PairingRequest.Request == ePairingRequest_New) {
-            SysLog("AUTH: Received PairingRequest from CCU.");
+            SysLog("ParsePacket(...): AUTH: Received PairingRequest from CCU.");
             
             /* Save CCU IPv4(Address/Port) to dynamic Endpoint */
             CCU_EP.Member.Addr.Dword = IPv4ToUint32(
@@ -167,12 +170,20 @@ void ParsePacket(PacketSlot_t* pkt){
             );
             CCU_EP.Member.Port.Word = Fr->Header.Info.IPv4Port;
 
+            SysLog("ParsePacket(...): Saved: CCU's IPv4_Addr=%d:%d:%d:%d | IPv4_Port=%d",
+                Fr->Header.Info.IPv4Address[0],
+                Fr->Header.Info.IPv4Address[1],
+                Fr->Header.Info.IPv4Address[2],
+                Fr->Header.Info.IPv4Address[3],
+                CCU_EP.Member.Port.Word
+            );
+
             /* Change State Machine */
             App_HeartBeat_State = eSTATE_AUTHENTICATION;
         }
     }
     /* 3. Process Keep-Alive frames to feed the watchdog */
-    else if (Fr->Header.FrameType == eFrameType_KeepAlive) {
+    else if (eFrameType_KeepAlive == Fr->Header.FrameType) {
         #ifndef DISABLE_KEEPALIVE_TRACK
             /* Feed the CCU Keep-Alive Watchdog */
             last_keepalive_time = xTaskGetTickCount();
@@ -323,6 +334,7 @@ ReturnCode_t App_ConnectCCU(void) {
     
     // __STATE_AUTHENTICATION__:
     if (eSTATE_AUTHENTICATION == App_HeartBeat_State) {
+        SysLog("App_ConnectCCU(...): eSTATE_AUTHENTICATION");
         auth_start_time = xTaskGetTickCount();
         
         memset(&tx_frame, 0, sizeof(ZECUFrame_Generic_t));
@@ -335,9 +347,22 @@ ReturnCode_t App_ConnectCCU(void) {
         last_challenge = tx_frame.Body.AuthTX.Challenge;
 
         while (eSTATE_AUTHENTICATION == App_HeartBeat_State) {
-            if ((xTaskGetTickCount() - auth_start_time) > pdMS_TO_TICKS(5000)) {
-                SysErr("App_ConnectCCU: Timeout (5s) waiting for AuthRX! Reverting to BROADCAST.");
+            SysLog("App_ConnectCCU(...): eSTATE_AUTHENTICATION");
+            TickType_t elapsed_ticks = xTaskGetTickCount() - auth_start_time;
+            uint32_t elapsed_ms = elapsed_ticks * portTICK_PERIOD_MS;
+
+            /* Calculate remaining time in milliseconds (clamp to 0 if timed out) */
+            uint32_t remaining_ms = (elapsed_ms < CCU_CONNECT_AUTH_TIMEOUT_MS) ? (CCU_CONNECT_AUTH_TIMEOUT_MS - elapsed_ms) : 0;
+
+            /* Optional: Log the exact time left before hitting the timeout */
+            /* SysDebug("App_ConnectCCU: Time left for AuthRX: %lu ms", remaining_ms); */
+
+            /* Check if the wait time has exceeded the CCU_CONNECT_AUTH_TIMEOUT_MSms timeout threshold */
+            if (elapsed_ticks > pdMS_TO_TICKS(CCU_CONNECT_AUTH_TIMEOUT_MS)) {
+                SysErr("App_ConnectCCU: Timeout waiting for AuthRX! Elapsed: %lu ms. Reverting to BROADCAST.", elapsed_ms);
                 App_HeartBeat_State = eSTATE_BROADCAST;
+
+                /* Revert state machine to BROADCAST mode due to authentication timeout */
                 goto __STATE_BROADCAST__;
             }
 

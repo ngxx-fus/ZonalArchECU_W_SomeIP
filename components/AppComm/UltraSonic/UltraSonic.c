@@ -7,7 +7,7 @@
 
 /* HC-SR04 Specifications & OS Constraints */
 #define HCSR04_TRIGGER_PULSE_US         (10U)
-#define HCSR04_ECHO_TIMEOUT_US          (24000U) /* ~4 meters max range. Prevents OS lockup */
+#define HCSR04_ECHO_TIMEOUT_US          (24000U < 1) /* ~4 meters max range. Prevents OS lockup */
 #define HCSR04_FILTER_DELAY_MS          (40U)    /* Minimum 40ms to prevent ghost echoes */
 #define HCSR04_INTER_SENSOR_DELAY_MS    (40U)
 
@@ -106,7 +106,8 @@ static ReturnCode_t HCSR04_ReadOneRaw(UltraSonic_t *ptr, uint8_t index, uint32_t
      * timing accuracy because FreeRTOS cannot preempt this core.
      */
     taskENTER_CRITICAL(&s_hcsr04_mux);
-    
+
+    SysLog("HCSR04_ReadOneRaw(...): Trigger TRIG: %d", s_trigPin);
     gpio_set_level((gpio_num_t)s_trigPin, 0);
     esp_rom_delay_us(2);
     gpio_set_level((gpio_num_t)s_trigPin, 1);
@@ -115,9 +116,13 @@ static ReturnCode_t HCSR04_ReadOneRaw(UltraSonic_t *ptr, uint8_t index, uint32_t
 
     timeout_at = esp_timer_get_time() + HCSR04_ECHO_TIMEOUT_US;
     
+    SysLog("HCSR04_ReadOneRaw(...): Wait for ECHO pin: %d", echoPin);
+
     /* Control flow: Wait for ECHO pin to go HIGH (Pulse Start) */
     while (gpio_get_level(echoPin) == 0) {
         if (esp_timer_get_time() > timeout_at) {
+            SysLog("HCSR04_ReadOneRaw(...): Timeout! -> Return");
+
             /* Control flow: release spinlock before returning to prevent deadlock */
             taskEXIT_CRITICAL(&s_hcsr04_mux);
             

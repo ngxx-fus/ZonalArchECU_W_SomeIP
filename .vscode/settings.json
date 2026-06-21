@@ -5,5 +5,37 @@
         "hpoint",
         "HSPI",
         "ledc"
-    ]
+    ],
+    "editor.defaultFormatter": "ms-vscode.cpptools",
+    "fileHeaderComment.parameter": {
+
+        "*": {
+            "author": "Nguyen Thanh Phu (ngxxfus)",
+            "company": "NGXX-FUS",
+            "brief": "",
+            "commentbegin": "/**************************************************************************************************",
+            "commentprefix": " *",
+            "commentend": " **************************************************************************************************/"
+        }
+    },
+    "fileHeaderComment.template": {
+        "c,h": [
+            "${commentbegin}",
+            "${commentprefix} @file    ${FileName}",
+            "${commentprefix} @author  ${author}",
+            "${commentprefix} @date    ${datetime}",
+            "${commentend}",
+            ""
+        ],
+        "python": [
+            "\"\"\"",
+            " @file    ${FileName}",
+            " @author  ${author}",
+            " @company ${company}",
+            " @date    ${datetime}",
+            " @brief   ${brief}",
+            "\"\"\"",
+            ""
+        ]
+    }
 }

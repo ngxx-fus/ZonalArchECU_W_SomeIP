@@ -39,6 +39,9 @@ KEEPALIVE_FRAME_TYPE = 0x5500AA00
 # /* Flag to disable Keep-Alive tracking for testing purposes */
 DISABLE_KEEPALIVE_TRACK = True
 
+CURRENT_CCU_IP="10.0.0.100"
+CURRENT_CCU_PORT=30490
+
 # /* ========================================================================= */
 # /* ZECU DISCOVERY DIALOG                                                     */
 # /* ========================================================================= */
@@ -283,6 +286,11 @@ class MyMonitorApp(QMainWindow):
         self.ui.stackedWidget.setCurrentIndex(0)
 
         self.app_log("System Ready. Waiting for ECU Heartbeats...")
+        self.app_log(f"CCU's IPv4 Address: {CURRENT_CCU_IP} | Port: {CURRENT_CCU_PORT}")
+        self.app_log(f"Pls change the IPv4 Addr/Port in MonitorMain.py if it's not matched!")
+
+        SysInfo(f"CCU's IPv4 Address: {CURRENT_CCU_IP} | Port: {CURRENT_CCU_PORT}")
+        SysInfo(f"Pls change the IPv4 Addr/Port in MonitorMain.py if it's not matched!")
         SysInfo("System Ready. Waiting for ECU Heartbeats...")
 
     # /*
@@ -491,27 +499,66 @@ class MyMonitorApp(QMainWindow):
                     crc >>= 1
         return crc
         
+    # def build_zecu_frame(self, frame_type, body_data):
+    #     # Pad body strictly to 520 bytes (ZECUFrame_Body_t Max Size)
+    #     body = body_data.ljust(520, b'\x00')
+        
+    #     # Header (88 bytes strictly aligned)
+    #     header = struct.pack("<BBBB64s6sB4sHBBBI",
+    #         0xAA, 0x04, 0xAA, 0xAA,
+    #         b"CentralControlUnit",
+    #         bytes.fromhex("e466e5984fd7"),
+    #         0xAA, socket.inet_aton(CURRENT_CCU_IP), CURRENT_CCU_PORT,
+    #         0xAA, 0xAA, 0xAA,
+    #         frame_type
+    #     )
+        
+    #     payload = header + body # 608 bytes payload
+    #     csum = self.calc_checksum16(payload)
+    #     crc = self.calc_crc32(payload) ^ 0xFFFFFFFF
+        
+    #     trailer = struct.pack("<BHBI", 0xAA, csum, 0xAA, crc)
+    #     return payload + trailer
+        
+    # /*
+    #  * @brief Constructs a complete ZECU frame with header and trailer.
+    #  * @param frame_type The integer ID representing the frame type.
+    #  * @param body_data The raw bytearray payload to embed.
+    #  * @return Fully assembled bytearray frame ready for transmission.
+    #  */
     def build_zecu_frame(self, frame_type, body_data):
-        # Pad body strictly to 520 bytes (ZECUFrame_Body_t Max Size)
+        # /* Pad body strictly to 520 bytes (ZECUFrame_Body_t Max Size) */
         body = body_data.ljust(520, b'\x00')
         
-        # Header (88 bytes strictly aligned)
+        # /* Pack header strictly aligned to 88 bytes */
         header = struct.pack("<BBBB64s6sB4sHBBBI",
             0xAA, 0x04, 0xAA, 0xAA,
             b"CentralControlUnit",
             bytes.fromhex("e466e5984fd7"),
-            0xAA, socket.inet_aton("10.0.0.102"), 30490,
+            0xAA, socket.inet_aton(CURRENT_CCU_IP), CURRENT_CCU_PORT,
             0xAA, 0xAA, 0xAA,
             frame_type
         )
+        
+        # /* Log frame details to trace header and raw body contents */
+        if True:
+            self.app_log(f"FRAME BUILD: Type=0x{frame_type:08X}, IP={CURRENT_CCU_IP}:{CURRENT_CCU_PORT}")
+            self.app_log(f"FRAME BUILD: Header ({len(header)} bytes) = {header.hex().upper()}")
+            self.app_log(f"FRAME BUILD: Raw Body ({len(body_data)} bytes) = {body_data.hex().upper()}")
+            
+            SysLog("FRAME BUILD: Type=0x%08X, IP=%s:%d", frame_type, CURRENT_CCU_IP, CURRENT_CCU_PORT)
+            SysLog("FRAME BUILD: Header = %s", header.hex().upper())
+            SysLog("FRAME BUILD: Raw Body = %s", body_data.hex().upper())
         
         payload = header + body # 608 bytes payload
         csum = self.calc_checksum16(payload)
         crc = self.calc_crc32(payload) ^ 0xFFFFFFFF
         
         trailer = struct.pack("<BHBI", 0xAA, csum, 0xAA, crc)
-        return payload + trailer
         
+        # /* Return the assembled frame payload including trailer */
+        return payload + trailer
+
     # /*
     #  * @brief Verifies active internet connection via DNS port probe.
     #  * @return True if connected, False otherwise.
@@ -964,7 +1011,7 @@ class MyMonitorApp(QMainWindow):
     #  * @param max_points The maximum number of historical points evaluated.
     #  */
     def refresh_graph(self, max_points):
-        SysLog("Refreshing Matplotlib graph canvas. Max points: %d", max_points)
+        # SysLog("Refreshing Matplotlib graph canvas. Max points: %d", max_points)
         global_max_x, global_min_x = 0, 0
         global_max_dist, global_max_motor = 0, 0
         global_max_cycle = 0
@@ -1074,11 +1121,11 @@ class MyMonitorApp(QMainWindow):
             self._transmit_motor_update("Back", update_l=update_bl, update_r=update_br)
 
         # /* Reset selection to prevent stuck buttons on next trigger */
-        self.vis_selected = { k: False for k in self.vis_selected }
-        self.ui.Visualization_EngineSelect_FrontLeft.setStyleSheet("")
-        self.ui.Visualization_EngineSelect_FrontRight.setStyleSheet("")
-        self.ui.Visualization_EngineSelect_BackLeft.setStyleSheet("")
-        self.ui.Visualization_EngineSelect_BackRight.setStyleSheet("")
+        # self.vis_selected = { k: False for k in self.vis_selected }
+        # self.ui.Visualization_EngineSelect_FrontLeft.setStyleSheet("")
+        # self.ui.Visualization_EngineSelect_FrontRight.setStyleSheet("")
+        # self.ui.Visualization_EngineSelect_BackLeft.setStyleSheet("")
+        # self.ui.Visualization_EngineSelect_BackRight.setStyleSheet("")
 
         self.app_log(f"VISUALIZATION: Speed updated to {val} for selected engines.")
         
