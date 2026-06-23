@@ -1,3 +1,54 @@
-.clangd
-.cache/
+# ========================
+# Build directories
+# ========================
 build/
+build_*/
+cmake-build-*/
+out/
+dist/
+bin/
+obj/
+
+# ========================
+# C/C++ & ESP-IDF Artifacts
+# ========================
+*.o
+*.obj
+*.so
+*.dll
+*.exe
+*.elf
+*.bin
+*.map
+*.a
+*.lib
+sdkconfig.old
+
+# ========================
+# Python
+# ========================
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# ========================
+# IDE & Cache
+# ========================
+.idea/
+.clangd/
+.cache/
+
+# ========================
+# Documentation
+# ========================
+docs_html/
+
+# ========================
+# OS Files
+# ========================
+.DS_Store
+Thumbs.db

@@ -8,7 +8,8 @@ import signal
 import struct
 from datetime import datetime
 from PySide6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QTextEdit, 
-                               QDialog, QTreeView, QMenu, QTreeWidgetItem)
+                               QDialog, QTreeView, QMenu, QTreeWidgetItem,
+                               QHBoxLayout, QLabel, QLineEdit, QPushButton)
 from PySide6.QtCore import Qt, QTimer, QUrl
 from collections import deque
 
@@ -41,6 +42,49 @@ DISABLE_KEEPALIVE_TRACK = True
 
 CURRENT_CCU_IP="10.0.0.100"
 CURRENT_CCU_PORT=30490
+
+# /* ========================================================================= */
+# /* CHANGE IP DIALOG                                                          */
+# /* ========================================================================= */
+
+class ChangeIPDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Change IP address")
+        self.setMinimumWidth(300)
+        
+        layout = QVBoxLayout(self)
+        
+        global CURRENT_CCU_IP
+        self.lbl_current = QLabel(f"Current IP address: {CURRENT_CCU_IP}")
+        layout.addWidget(self.lbl_current)
+        
+        layout_new_ip = QHBoxLayout()
+        self.lbl_new = QLabel("New IP address:")
+        self.input_new = QLineEdit()
+        layout_new_ip.addWidget(self.lbl_new)
+        layout_new_ip.addWidget(self.input_new)
+        layout.addLayout(layout_new_ip)
+        
+        layout_buttons = QHBoxLayout()
+        self.btn_cancel = QPushButton("Cancel")
+        self.btn_ok = QPushButton("OK")
+        layout_buttons.addStretch()
+        layout_buttons.addWidget(self.btn_cancel)
+        layout_buttons.addWidget(self.btn_ok)
+        layout.addLayout(layout_buttons)
+        
+        self.btn_cancel.clicked.connect(self.reject)
+        self.btn_ok.clicked.connect(self.accept)
+        
+    def accept(self):
+        global CURRENT_CCU_IP
+        new_ip = self.input_new.text().strip()
+        if new_ip:
+            CURRENT_CCU_IP = new_ip
+            if self.parent() and hasattr(self.parent(), 'app_log'):
+                self.parent().app_log(f"Updated CCU IP to: {CURRENT_CCU_IP}")
+        super().accept()
 
 # /* ========================================================================= */
 # /* ZECU DISCOVERY DIALOG                                                     */
@@ -358,6 +402,7 @@ class MyMonitorApp(QMainWindow):
         self.ui.actionGPS_map.triggered.connect(self.show_gps_view)
         self.ui.actionECU_status_graph.triggered.connect(self.show_graph_view)
         self.ui.actionZECU_List.triggered.connect(self.open_discovery_dialog)
+        self.ui.actionChange_IP_address.triggered.connect(self.open_change_ip_dialog)
         
         # /* Return from execution */
         return
@@ -368,6 +413,14 @@ class MyMonitorApp(QMainWindow):
     def open_discovery_dialog(self):
         self.app_log("Opening ZECU Discovery Dialog...")
         dialog = DiscoveryDialog(self)
+        dialog.exec()
+
+    # /*
+    #  * @brief Opens the Change IP Dialog
+    #  */
+    def open_change_ip_dialog(self):
+        self.app_log("Opening Change IP Dialog...")
+        dialog = ChangeIPDialog(self)
         dialog.exec()
         
     # /*
