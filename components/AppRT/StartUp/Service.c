@@ -27,7 +27,7 @@ AppService_t ServiceList[] = {
     [eSERVICE_ULTRA_SONIC_RUNTIME] =
     {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				eSERVICE_DISABLED},
 	[eSERVICE_LOCATION_RUNTIME] =
-	{"LocRuntime",              Loc_Runtime,                2048,           NULL,       eTask_Normal,       0,				eSERVICE_DISABLED},
+	{"LocRuntime",              Loc_Runtime,                2048,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
 };
 
 /// @brief Initializes and creates tasks for all services defined in ServiceList

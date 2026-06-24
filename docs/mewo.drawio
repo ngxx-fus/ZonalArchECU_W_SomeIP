@@ -1,0 +1,177 @@
+<mxfile host="65bd71144e">
+    <diagram id="motor_reapply_flow" name="MotorSetSpeed_Reapply">
+        <mxGraphModel dx="2800" dy="926" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="SL_APP" value="Application Task: MotorSetSpeed()" style="swimlane;whiteSpace=wrap;html=1;startSize=23;" parent="1" vertex="1">
+                    <mxGeometry x="-30" y="40" width="470" height="1300" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_START" value="Start:&lt;br/&gt;MotorSetSpeed()" style="ellipse;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="190" y="40" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_LOOP" value="i &amp;lt; MaxRetries?" style="rhombus;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="190" y="140" width="160" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_ERR_TO" value="return STAT_ERR_TIMEOUT;" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="35" y="260" width="150" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_TAKE_1" value="xSemaphoreTake(&lt;br/&gt;MotorLock)" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="190" y="260" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_CHK_SPEED" value="Target != Current ||&lt;br/&gt;Flag != 0?" style="rhombus;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="180" y="360" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_SET_SPEED" value="HBridge_SetSpeed()&lt;br/&gt;Set(eHBridge_ModifiedSpeed)" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="100" y="480" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_GIVE_1" value="xSemaphoreGive(&lt;br/&gt;MotorLock)" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="190" y="580" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_NOTIFY" value="xTaskNotifyGive(&lt;br/&gt;MotorTaskHandle)" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="190" y="680" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_DELAY" value="vTaskDelay(1ms)" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="190" y="780" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_TAKE_2" value="xSemaphoreTake(&lt;br/&gt;MotorLock)" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="190" y="880" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_READ_STATE" value="Read Flags &amp;amp; Speeds" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="190" y="980" width="160" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_GIVE_2" value="xSemaphoreGive(&lt;br/&gt;MotorLock)" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="190" y="1060" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_CHK_MATCH" value="!ModifiedSpeedFlag &amp;amp;&amp;amp;&lt;br/&gt;Current == Target?" style="rhombus;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="170" y="1160" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_INC_I" value="i++" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="80" y="1170" width="60" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="APP_RET_OKE" value="return STAT_OKE;" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_APP" vertex="1">
+                    <mxGeometry x="310" y="1240" width="140" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_START" target="APP_LOOP" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_2" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_LOOP" target="APP_ERR_TO" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_3" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_LOOP" target="APP_TAKE_1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_TAKE_1" target="APP_CHK_SPEED" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_5" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_CHK_SPEED" target="APP_SET_SPEED" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_6" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_CHK_SPEED" target="APP_GIVE_1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="390" y="400"/>
+                            <mxPoint x="390" y="610"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="E_APP_7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_SET_SPEED" target="APP_GIVE_1" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_8" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_GIVE_1" target="APP_NOTIFY" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_9" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_NOTIFY" target="APP_DELAY" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_10" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_DELAY" target="APP_TAKE_2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_11" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_TAKE_2" target="APP_READ_STATE" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_12" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_READ_STATE" target="APP_GIVE_2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_13" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_GIVE_2" target="APP_CHK_MATCH" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_14" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_CHK_MATCH" target="APP_INC_I" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_15" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" parent="SL_APP" source="APP_CHK_MATCH" target="APP_RET_OKE" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_APP_16" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_APP" source="APP_INC_I" target="APP_LOOP" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="20" y="1200"/>
+                            <mxPoint x="20" y="100"/>
+                            <mxPoint x="270" y="100"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="SL_MAIN" value="Background Task: MotorRuntime()" style="swimlane;whiteSpace=wrap;html=1;startSize=23;" parent="1" vertex="1">
+                    <mxGeometry x="480" y="40" width="400" height="1300" as="geometry"/>
+                </mxCell>
+                <mxCell id="MAIN_SLEEP" value="ulTaskNotifyTake(&lt;br/&gt;pdTRUE, 20ms)" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_MAIN" vertex="1">
+                    <mxGeometry x="120" y="40" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="MAIN_WAKE" value="Wakeup Signal&lt;br/&gt;(Notify or Timeout)" style="rhombus;whiteSpace=wrap;html=1;" parent="SL_MAIN" vertex="1">
+                    <mxGeometry x="110" y="140" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="MAIN_TAKE" value="xSemaphoreTake(&lt;br/&gt;MotorLock)" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_MAIN" vertex="1">
+                    <mxGeometry x="120" y="260" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="MAIN_CHK_FLAG" value="Flag != 0?" style="rhombus;whiteSpace=wrap;html=1;" parent="SL_MAIN" vertex="1">
+                    <mxGeometry x="140" y="360" width="120" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="MAIN_APPLY" value="HBridge_Apply()&lt;br/&gt;ledc_set_duty()&lt;br/&gt;Clear Flags" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_MAIN" vertex="1">
+                    <mxGeometry x="120" y="480" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="MAIN_GIVE" value="xSemaphoreGive(&lt;br/&gt;MotorLock)" style="rounded=1;whiteSpace=wrap;html=1;" parent="SL_MAIN" vertex="1">
+                    <mxGeometry x="120" y="580" width="160" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_MAIN_1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_MAIN" source="MAIN_SLEEP" target="MAIN_WAKE" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_MAIN_2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_MAIN" source="MAIN_WAKE" target="MAIN_TAKE" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_MAIN_3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_MAIN" source="MAIN_TAKE" target="MAIN_CHK_FLAG" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_MAIN_4" value="Yes" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_MAIN" source="MAIN_CHK_FLAG" target="MAIN_APPLY" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_MAIN_5" value="No" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_MAIN" source="MAIN_CHK_FLAG" target="MAIN_GIVE" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="320" y="400"/>
+                            <mxPoint x="320" y="610"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="E_MAIN_6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_MAIN" source="MAIN_APPLY" target="MAIN_GIVE" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_MAIN_7" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;" parent="SL_MAIN" source="MAIN_GIVE" target="MAIN_SLEEP" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="360" y="610"/>
+                            <mxPoint x="360" y="70"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="E_CROSS_1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;" parent="1" source="APP_NOTIFY" target="MAIN_WAKE" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="400" y="750"/>
+                            <mxPoint x="400" y="220"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

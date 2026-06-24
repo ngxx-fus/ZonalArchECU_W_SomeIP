@@ -53,7 +53,7 @@ idf_component_register(
 # Command for generating configurations via Python
 add_custom_command(
     OUTPUT  "${PINOUT_HEADER}" "${COMM_HEADER}" "${COMM_SOURCE}"
-    COMMAND python3 ${CONFIG_GENERATOR} ${SYSTEM_CONFIG_YAML}
+    COMMAND python ${CONFIG_GENERATOR} ${SYSTEM_CONFIG_YAML}
     DEPENDS "${PINOUT_DEF}" "${COMM_DEF_H}" "${COMM_DEF_C}" "${SYSTEM_CONFIG_YAML}" "${CONFIG_GENERATOR}"
     COMMENT "Generating Config files from SystemConfig.yml using Python..."
     VERBATIM
