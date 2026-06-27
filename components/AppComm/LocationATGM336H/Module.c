@@ -10,7 +10,7 @@ volatile uint32_t Loc_Long = 106660172; // Default to HCMC Longitude
 volatile uint32_t Loc_Lat  = 10762622;  // Default to HCMC Latitude
 
 #ifndef LOC_LOG_EN
-    #define LOC_LOG_EN 0
+    #define LOC_LOG_EN 1
 #endif
 
 #if (LOC_LOG_EN == 1)

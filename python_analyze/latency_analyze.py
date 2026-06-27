@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 ZONE_ECU_IP = '10.0.0.58'
-CCU_IP = '10.0.0.102'
+CCU_IP = '10.0.0.100'
 
 def parse_log_file(filepath):
     """
@@ -64,24 +64,27 @@ def analyze_timings(packets):
         if pkt['src'] == CCU_IP:
             waiting_for_response = True
             last_ccu_time = pkt['time']
-            
-            # Break the cycle time calculation chain here because CCU interrupted
-            has_reference_for_cycle = False 
+            # Do NOT break cycle reference yet. We only break it if the ZECU ACTUALLY sends a response.
             
         # Route execution for ZoneECU sending a packet
         elif pkt['src'] == ZONE_ECU_IP:
+            is_response = False
+            
             if waiting_for_response:
-                # Type 2: Immediate response packet after CCU command
                 diff_ms = (pkt['time'] - last_ccu_time) * 1000.0
-                response_times_ms.append(diff_ms)
+                # A true response happens very quickly. If it takes >100ms, it's likely just a normal heartbeat
+                # and the CCU packet was dropped or ignored.
+                if diff_ms < 100.0:
+                    # Type 2: Immediate response packet after CCU command
+                    response_times_ms.append(diff_ms)
+                    is_response = True
+                    # This response packet is an anomaly, absolutely DO NOT use as cycle time reference
+                    has_reference_for_cycle = False
                 
-                # Response completed, reset wait flag
+                # Reset wait flag regardless of whether we got a response or it timed out
                 waiting_for_response = False
                 
-                # This response packet is an anomaly, absolutely DO NOT use as cycle time reference
-                has_reference_for_cycle = False
-                
-            else:
+            if not is_response:
                 # Type 1: Normal Heartbeat
                 if has_reference_for_cycle:
                     # Have valid reference from previous Normal Heartbeat -> Calculate cycle
@@ -89,7 +92,6 @@ def analyze_timings(packets):
                     cycle_times_ms.append(diff_ms)
                     
                 # The current Normal Heartbeat packet becomes the reference for the next Normal one
-                # (Note: If this is the first packet after an interruption, it only sets reference without calculating diff)
                 reference_time = pkt['time']
                 has_reference_for_cycle = True
                 

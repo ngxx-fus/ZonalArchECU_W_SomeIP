@@ -19,15 +19,15 @@
 AppService_t ServiceList[] = {
     /*name*/                /*function ptr*/        		/*Stack Size*//*ParamPtr*//*Priority*/        /*TaskHandle*/	/*Status*/
     [eSERVICE_ETHERNET_RUNTIME] =
-    {"EthRuntime",              Eth_Runtime,     			3096,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
+    {"EthRuntime",              Eth_Runtime,     			3096,           NULL,       eTask_RealTime,     0,				SERVICE_ETH_RUNTIME_EN 		/*eSERVICE_ENABLED*/},
     [eSERVICE_HEART_BEAT_RUNTIME] =
-    {"HeartBeatRuntime",        HeartBeatRuntime,           3096,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
+    {"HeartBeatRuntime",        HeartBeatRuntime,           3096,           NULL,       eTask_Normal,       0,				SERVICE_HEART_BEAT_EN		/*eSERVICE_ENABLED*/},
     [eSERVICE_MORTOR_RUNTIME] =
-	{"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
+	{"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0,				SERVICE_MOTOR_CONTROL_EN	/*eSERVICE_ENABLED*/},
     [eSERVICE_ULTRA_SONIC_RUNTIME] =
-    {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				eSERVICE_DISABLED},
+    {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				SERVICE_MEAS_DISTANCE_EN	/*eSERVICE_ENABLED*/},
 	[eSERVICE_LOCATION_RUNTIME] =
-	{"LocRuntime",              Loc_Runtime,                2048,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
+	{"LocRuntime",              Loc_Runtime,                2048,           NULL,       eTask_Normal,       0,				SERVICE_MEAS_LOCATION_EN	/*eSERVICE_DISABLED*/},
 };
 
 /// @brief Initializes and creates tasks for all services defined in ServiceList

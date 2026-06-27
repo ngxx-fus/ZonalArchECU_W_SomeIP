@@ -101,8 +101,8 @@ static ReturnCode_t HCSR04_ReadOneRaw(UltraSonic_t *ptr, uint8_t index, uint32_t
 
     echoPin = (gpio_num_t)ptr->Sensor[index].Echo;
 
-    SysLog("HCSR04_ReadOneRaw(...): Trigger TRIG: %d", s_trigPin);
-    SysLog("HCSR04_ReadOneRaw(...): Wait for ECHO pin: %d", echoPin);
+    /// SysLog("HCSR04_ReadOneRaw(...): Trigger TRIG: %d", s_trigPin);
+    /// SysLog("HCSR04_ReadOneRaw(...): Wait for ECHO pin: %d", echoPin);
 
     /* * Control flow: Enter OS Critical Section for the ENTIRE read process.
      * The user explicitly accepts busy-waiting up to 24ms. This guarantees 100% 
@@ -124,7 +124,7 @@ static ReturnCode_t HCSR04_ReadOneRaw(UltraSonic_t *ptr, uint8_t index, uint32_t
             /* Control flow: release spinlock before returning to prevent deadlock */
             taskEXIT_CRITICAL(&s_hcsr04_mux);
             
-            SysLog("HCSR04_ReadOneRaw(...): Timeout! -> Return");
+            /// SysLog("HCSR04_ReadOneRaw(...): Timeout! -> Return");
             
             /* Control flow: kick watchdog before exiting with timeout */
             /// esp_task_wdt_reset();

@@ -96,6 +96,11 @@ def main():
                     
                 elif dtype == "String":
                     comm_h_defines += f'#define {macro_name}_STR "{val}"\n\n'
+                    
+                # -- SERVICE ENUM MACRO --
+                elif dtype == "Service":
+                    # Generate macro for service enum value
+                    comm_h_defines += f'#define {macro_name} {val}\n'
             else:
                 for k, v in node.items():
                     new_prefix = f"{prefix}{k}_" if prefix else f"{k}_"
