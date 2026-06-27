@@ -389,6 +389,13 @@ class MyMonitorApp(QMainWindow):
         self.ui.Control_Back_Motor_Control_Slider_Left.sliderReleased.connect(self.on_slider_back_left_released)
         self.ui.Control_Back_Motor_Control_Slider_Right.sliderReleased.connect(self.on_slider_back_right_released)
         
+        # /* Bind Common Speed Set toggle button */
+        self.ui.Visualization_EnabledCommonSpeedSet.clicked.connect(self.on_common_speed_set_toggled)
+        
+        # /* Initialize default common speed set state (Disabled by default) */
+        self.common_speed_set_enabled = False
+        self.ui.Visualization_EngineSpeedSpinBox.setEnabled(False)
+
         # /* Verify and connect clear status button if it exists */
         if hasattr(self.ui, 'Visualization_MonitorApp_Status_Clear'):
             self.ui.Visualization_MonitorApp_Status_Clear.clicked.connect(self.on_clear_status_clicked)
@@ -535,6 +542,33 @@ class MyMonitorApp(QMainWindow):
             self.app_log(f"AUTH ERROR: {e}")
             SysErr("AUTH ERROR: %s", str(e))
             
+    # /*
+    #  * @brief Toggles the Common Speed Setting mode across the Visualization UI.
+    #  */
+    def on_common_speed_set_toggled(self):
+        self.common_speed_set_enabled = not getattr(self, 'common_speed_set_enabled', False)
+        
+        # /* Evaluate state to apply appropriate UI styling and properties */
+        if self.common_speed_set_enabled:
+            # /* Apply active styling and enable global controls */
+            self.ui.Visualization_EnabledCommonSpeedSet.setStyleSheet("background-color: green; color: white;")
+            self.ui.Visualization_EngineSpeedSpinBox_FrontLeft.setEnabled(False)
+            self.ui.Visualization_EngineSpeedSpinBox_FrontRight.setEnabled(False)
+            self.ui.Visualization_EngineSpeedSpinBox_BackLeft.setEnabled(False)
+            self.ui.Visualization_EngineSpeedSpinBox_BackRight.setEnabled(False)
+            self.ui.Visualization_EngineSpeedSpinBox.setEnabled(True)
+        else:
+            # /* Restore default styling, enable independent controls */
+            self.ui.Visualization_EnabledCommonSpeedSet.setStyleSheet("")
+            self.ui.Visualization_EngineSpeedSpinBox_FrontLeft.setEnabled(True)
+            self.ui.Visualization_EngineSpeedSpinBox_FrontRight.setEnabled(True)
+            self.ui.Visualization_EngineSpeedSpinBox_BackLeft.setEnabled(True)
+            self.ui.Visualization_EngineSpeedSpinBox_BackRight.setEnabled(True)
+            self.ui.Visualization_EngineSpeedSpinBox.setEnabled(False)
+            
+        # /* Return from execution */
+        return
+
     def calc_checksum16(self, data):
         csum = sum(data)
         while csum >> 16:
@@ -1149,38 +1183,56 @@ class MyMonitorApp(QMainWindow):
         # /* Return from execution */
         return
 
-    # /*
+#    /*
     #  * @brief Processes the Set request from the Visualization group.
-    #  * Transmits motor update commands for any selected engines.
+    #  * @details Transmits motor update commands using either common or individual spinboxes.
     #  */
     def on_vis_speed_set(self):
-        val = self.ui.Visualization_EngineSpeedSpinBox.value()
+        common_mode = getattr(self, 'common_speed_set_enabled', False)
+        common_val = self.ui.Visualization_EngineSpeedSpinBox.value()
         
-        update_fl = self.vis_selected["FrontLeft"]
-        update_fr = self.vis_selected["FrontRight"]
-        update_bl = self.vis_selected["BackLeft"]
-        update_br = self.vis_selected["BackRight"]
+        update_fl = self.vis_selected.get("FrontLeft", False)
+        update_fr = self.vis_selected.get("FrontRight", False)
+        update_bl = self.vis_selected.get("BackLeft", False)
+        update_br = self.vis_selected.get("BackRight", False)
 
         # /* Transmit data if any front engine was modified */
         if update_fl or update_fr:
-            if update_fl: self.motor_states["Front"]["L"] = val
-            if update_fr: self.motor_states["Front"]["R"] = val
+            if update_fl:
+                # /* Select speed source based on common mode flag */
+                if common_mode:
+                    self.motor_states["Front"]["L"] = common_val
+                else:
+                    self.motor_states["Front"]["L"] = self.ui.Visualization_EngineSpeedSpinBox_FrontLeft.value()
+                    
+            if update_fr:
+                # /* Select speed source based on common mode flag */
+                if common_mode:
+                    self.motor_states["Front"]["R"] = common_val
+                else:
+                    self.motor_states["Front"]["R"] = self.ui.Visualization_EngineSpeedSpinBox_FrontRight.value()
+                    
             self._transmit_motor_update("Front", update_l=update_fl, update_r=update_fr)
 
         # /* Transmit data if any back engine was modified */
         if update_bl or update_br:
-            if update_bl: self.motor_states["Back"]["L"] = val
-            if update_br: self.motor_states["Back"]["R"] = val
+            if update_bl:
+                # /* Select speed source based on common mode flag */
+                if common_mode:
+                    self.motor_states["Back"]["L"] = common_val
+                else:
+                    self.motor_states["Back"]["L"] = self.ui.Visualization_EngineSpeedSpinBox_BackLeft.value()
+                    
+            if update_br:
+                # /* Select speed source based on common mode flag */
+                if common_mode:
+                    self.motor_states["Back"]["R"] = common_val
+                else:
+                    self.motor_states["Back"]["R"] = self.ui.Visualization_EngineSpeedSpinBox_BackRight.value()
+                    
             self._transmit_motor_update("Back", update_l=update_bl, update_r=update_br)
 
-        # /* Reset selection to prevent stuck buttons on next trigger */
-        # self.vis_selected = { k: False for k in self.vis_selected }
-        # self.ui.Visualization_EngineSelect_FrontLeft.setStyleSheet("")
-        # self.ui.Visualization_EngineSelect_FrontRight.setStyleSheet("")
-        # self.ui.Visualization_EngineSelect_BackLeft.setStyleSheet("")
-        # self.ui.Visualization_EngineSelect_BackRight.setStyleSheet("")
-
-        self.app_log(f"VISUALIZATION: Speed updated to {val} for selected engines.")
+        self.app_log(f"VISUALIZATION: Speed updated for selected engines. (Common Mode: {common_mode})")
         
         # /* Return from execution */
         return

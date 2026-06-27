@@ -330,6 +330,19 @@
        <enum>QAbstractSpinBox::DefaultStepType</enum>
       </property>
      </widget>
+     <widget class="QPushButton" name="Visualization_EngineSelect_BackLeft">
+      <property name="geometry">
+       <rect>
+        <x>20</x>
+        <y>160</y>
+        <width>51</width>
+        <height>21</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Eng</string>
+      </property>
+     </widget>
     </widget>
     <widget class="QGroupBox" name="Control">
      <property name="geometry">
