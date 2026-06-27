@@ -11,7 +11,8 @@
 		eSERVICE_ETHERNET_RUNTIME 		= 1,
 		eSERVICE_ULTRA_SONIC_RUNTIME 	= 2,
 		eSERVICE_HEART_BEAT_RUNTIME 	= 3,
-		eSERVICE_LOCATION_RUNTIME		= 4
+		eSERVICE_LOCATION_RUNTIME		= 4,
+        eSERVICE_TEST_RUNTIME           = 5
 	};
 #endif
 
@@ -28,6 +29,8 @@ AppService_t ServiceList[] = {
     {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				SERVICE_MEAS_DISTANCE_EN	/*eSERVICE_ENABLED*/},
 	[eSERVICE_LOCATION_RUNTIME] =
 	{"LocRuntime",              Loc_Runtime,                2048,           NULL,       eTask_Normal,       0,				SERVICE_MEAS_LOCATION_EN	/*eSERVICE_DISABLED*/},
+    [eSERVICE_TEST_RUNTIME] =
+    {"TestRuntime",             Test_Runtime,               2048,           NULL,       eTask_RealTime,       0,            SERVICE_TEST_TRANS_EN		/*eSERVICE_ENABLED*/}
 };
 
 /// @brief Initializes and creates tasks for all services defined in ServiceList

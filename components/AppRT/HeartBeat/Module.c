@@ -2,6 +2,7 @@
 
 #include "../__CommonHeaders.h"
 #include "../../AppComm/SharedAPIs.h"
+#include "../TestModule/TestModule.h"
 
 #include "nvs_flash.h"
 #include "nvs.h"
@@ -188,6 +189,10 @@ void ParsePacket(PacketSlot_t* pkt){
             /* Feed the CCU Keep-Alive Watchdog */
             last_keepalive_time = xTaskGetTickCount();
         #endif
+        
+        extern void Test_WakeUp(void);
+        Test_WakeUp();
+        
         return; /* Skip further logging for Keep-Alive to prevent UART spam */
     }
     /* 3. Process Authentication Response (Monitor signed the challenge) */

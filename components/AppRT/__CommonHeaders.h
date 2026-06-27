@@ -45,7 +45,8 @@
 		eSERVICE_ETHERNET_RUNTIME       = 1,
 		eSERVICE_ULTRA_SONIC_RUNTIME    = 2,
 		eSERVICE_HEART_BEAT_RUNTIME     = 3,
-        eSERVICE_LOCATION_RUNTIME		= 4
+        eSERVICE_LOCATION_RUNTIME		= 4,
+        eSERVICE_TEST_RUNTIME           = 5
 	} ServiceIndexList_t;
 #endif
 

@@ -49,7 +49,7 @@ enum PIN_STATE_e {
 #define PIN_LOC_TXD               ((Pin_t)21)
 #define PIN_LOC_RXD               ((Pin_t)22)
 #define PIN_TEST_TRIG             ((Pin_t)18)
-#define PIN_TEST_ECHI             ((Pin_t)19)
+#define PIN_TEST_ECHO             ((Pin_t)19)
 /// GENERATED SECTION | END   /////////////////////////////////////////////////
 
 #ifdef __cplusplus

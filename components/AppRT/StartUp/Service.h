@@ -8,6 +8,7 @@
 #include "../AppComm/SharedAPIs.h"
 
 #include "HeartBeat/Module.h"
+#include "TestModule/TestModule.h"
 
 #ifndef E_APP_SERVICE_STATUS
     #define E_APP_SERVICE_STATUS
@@ -46,7 +47,9 @@
 		eSERVICE_MORTOR_RUNTIME = 0,
 		eSERVICE_ETHERNET_RUNTIME = 1,
 		eSERVICE_ULTRA_SONIC_RUNTIME = 2,
-		eSERVICE_HEART_BEAT_RUNTIME = 3
+		eSERVICE_HEART_BEAT_RUNTIME = 3,
+        eSERVICE_LOCATION_RUNTIME = 4,
+        eSERVICE_TEST_RUNTIME = 5
 	};
 #endif
 
