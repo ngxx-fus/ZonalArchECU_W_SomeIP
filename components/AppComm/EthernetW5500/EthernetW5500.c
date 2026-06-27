@@ -104,7 +104,8 @@ EthernetW5500_t* W5500_Create(Pin_t MISO, Pin_t MOSI, Pin_t CLK, Pin_t SCS, Pin_
     };
     spi_bus_add_device(SPI2_HOST, &dev_cfg, &w5500_spi_handle);
     /* install ISR service and add handler for W5500 INT pin */
-    if (gpio_install_isr_service(0) != ESP_OK) {
+    esp_err_t isr_res = gpio_install_isr_service(0);
+    if (isr_res != ESP_OK && isr_res != ESP_ERR_INVALID_STATE) {
         free(obj);
         return NULL;
     }

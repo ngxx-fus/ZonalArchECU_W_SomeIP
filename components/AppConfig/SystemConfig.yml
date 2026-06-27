@@ -42,6 +42,10 @@ ZECU:
       TXD:    { Macro: "PIN_LOC_TXD",   Type: UInt, Value: 21 }
       RXD:    { Macro: "PIN_LOC_RXD",   Type: UInt, Value: 22 }
 
+    Test_:
+      TRIG:    { Macro: "PIN_TEST_TRIG",   Type: UInt, Value: 18 }
+      ECHO:    { Macro: "PIN_TEST_ECHO",   Type: UInt, Value: 19 }
+
   Network:
     Gateway:
       IPv4: 
@@ -69,17 +73,33 @@ ZECU:
         Type: MAC
         Value: "NONE"
         
-    ZECU:
+    # ZECU: # FRONT ZECU
+    #   Name:
+    #     Macro: "ECU_NAME"
+    #     Type: String
+    #     Value: "Front-ZECU"
+    #   IPv4: 
+    #     Macro: "SRC_IP_ADDR"
+    #     Type: IPv4
+    #     Value: "10.0.0.58"
+    #   Port: 
+    #     Macro: "DEFAULT_PORT"
+    #     Type: Port
+    #     Value: 51786
+    #   MAC: 
+    #     Macro: "SRC_MAC_ADDR"
+    #     Type: MAC
+    #     Value: "b4:bf:e9:33:e0:6c"
+
+    ZECU: # BACK ZECU
       Name:
         Macro: "ECU_NAME"
         Type: String
-        Value: "Front-ZECU"
-        # Value: "Back-ZECU"
+        Value: "Back-ZECU"
       IPv4: 
         Macro: "SRC_IP_ADDR"
         Type: IPv4
-        Value: "10.0.0.58"
-        # Value: "10.0.0.47"
+        Value: "10.0.0.47"
       Port: 
         Macro: "DEFAULT_PORT"
         Type: Port
@@ -87,5 +107,30 @@ ZECU:
       MAC: 
         Macro: "SRC_MAC_ADDR"
         Type: MAC
-        Value: "b4:bf:e9:33:e0:6c"
-        # Value: "3c:8a:1f:a2:c7:49"
+        Value: "f4:2d:c9:6b:13:ec"
+
+    Service:
+      EthRuntime:
+        Macro: "SERVICE_ETH_RUNTIME_EN"
+        Type: Service
+        Value: eSERVICE_ENABLED # This is a enum 
+      HeatBeat:
+        Macro: "SERVICE_HEART_BEAT_EN"
+        Type: Service
+        Value: eSERVICE_ENABLED
+      MotorControl:
+        Macro: "SERVICE_MOTOR_CONTROL_EN"
+        Type: Service
+        Value: eSERVICE_ENABLED
+      MeasDistance:
+        Macro: "SERVICE_MEAS_DISTANCE_EN"
+        Type: Service
+        Value: eSERVICE_ENABLED
+      MeasLocation:
+        Macro: "SERVICE_MEAS_LOCATION_EN"
+        Type: Service
+        Value: eSERVICE_DISABLED
+      TestTransmission:
+        Macro:  "SERVICE_TEST_TRANS_EN"
+        Type: Service
+        Value: eSERVICE_ENABLED

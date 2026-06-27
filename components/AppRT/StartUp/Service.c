@@ -11,7 +11,8 @@
 		eSERVICE_ETHERNET_RUNTIME 		= 1,
 		eSERVICE_ULTRA_SONIC_RUNTIME 	= 2,
 		eSERVICE_HEART_BEAT_RUNTIME 	= 3,
-		eSERVICE_LOCATION_RUNTIME		= 4
+		eSERVICE_LOCATION_RUNTIME		= 4,
+        eSERVICE_TEST_RUNTIME           = 5
 	};
 #endif
 
@@ -19,15 +20,17 @@
 AppService_t ServiceList[] = {
     /*name*/                /*function ptr*/        		/*Stack Size*//*ParamPtr*//*Priority*/        /*TaskHandle*/	/*Status*/
     [eSERVICE_ETHERNET_RUNTIME] =
-    {"EthRuntime",              Eth_Runtime,     			3096,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
+    {"EthRuntime",              Eth_Runtime,     			3096,           NULL,       eTask_RealTime,     0,				SERVICE_ETH_RUNTIME_EN 		/*eSERVICE_ENABLED*/},
     [eSERVICE_HEART_BEAT_RUNTIME] =
-    {"HeartBeatRuntime",        HeartBeatRuntime,           3096,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
+    {"HeartBeatRuntime",        HeartBeatRuntime,           3096,           NULL,       eTask_Normal,       0,				SERVICE_HEART_BEAT_EN		/*eSERVICE_ENABLED*/},
     [eSERVICE_MORTOR_RUNTIME] =
-	{"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0,				eSERVICE_ENABLED},
+	{"MotorRuntime",            MotorRuntime,               2048,           NULL,       eTask_RealTime,     0,				SERVICE_MOTOR_CONTROL_EN	/*eSERVICE_ENABLED*/},
     [eSERVICE_ULTRA_SONIC_RUNTIME] =
-    {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				eSERVICE_DISABLED},
+    {"HCSR04Runtime",           HCSR04Runtime,              2048,           NULL,       eTask_Normal,       0,				SERVICE_MEAS_DISTANCE_EN	/*eSERVICE_ENABLED*/},
 	[eSERVICE_LOCATION_RUNTIME] =
-	{"LocRuntime",              Loc_Runtime,                2048,           NULL,       eTask_Normal,       0,				eSERVICE_ENABLED},
+	{"LocRuntime",              Loc_Runtime,                2048,           NULL,       eTask_Normal,       0,				SERVICE_MEAS_LOCATION_EN	/*eSERVICE_DISABLED*/},
+    [eSERVICE_TEST_RUNTIME] =
+    {"TestRuntime",             Test_Runtime,               2048,           NULL,       eTask_RealTime,       0,            SERVICE_TEST_TRANS_EN		/*eSERVICE_ENABLED*/}
 };
 
 /// @brief Initializes and creates tasks for all services defined in ServiceList
