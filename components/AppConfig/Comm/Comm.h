@@ -41,6 +41,11 @@ extern const Byte_t CCU_IPV4_ADDR[];
 #define CCU_IPV4_PORT_HEX 0x771A
 extern const Word_t CCU_IPV4_PORT;
 
+#define ZECU_ID_STR "7435"
+#define ZECU_ID_VAL 7435
+#define ZECU_ID_HEX 0x1D0B
+extern const Word_t ZECU_ID;
+
 #define ECU_NAME_STR "Back-ZECU"
 
 #define SRC_IP_ADDR_STR "10.0.0.47"
@@ -53,9 +58,9 @@ extern const Byte_t SRC_IP_ADDR[];
 #define DEFAULT_PORT_HEX 0xCA4A
 extern const Word_t DEFAULT_PORT;
 
-#define SRC_MAC_ADDR_STR "3c:8a:1f:a2:c7:49"
-#define SRC_MAC_ADDR_HEX 0x3C8A1FA2C749
-#define SRC_MAC_ADDR_INITIALIZER {0x3c, 0x8a, 0x1f, 0xa2, 0xc7, 0x49}
+#define SRC_MAC_ADDR_STR "f4:2d:c9:6b:13:ec"
+#define SRC_MAC_ADDR_HEX 0xF42DC96B13EC
+#define SRC_MAC_ADDR_INITIALIZER {0xf4, 0x2d, 0xc9, 0x6b, 0x13, 0xec}
 extern const Byte_t SRC_MAC_ADDR[];
 
 #define SERVICE_ETH_RUNTIME_EN eSERVICE_ENABLED

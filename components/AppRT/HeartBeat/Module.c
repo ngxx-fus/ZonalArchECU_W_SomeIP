@@ -319,6 +319,10 @@ ReturnCode_t App_ConnectCCU(void) {
     /* State machine entry point */
     __STATE_BROADCAST__:
     while (eSTATE_BROADCAST == App_HeartBeat_State) {
+        /*Lock the mortor*/
+        MotorSetSpeed0(0);
+        MotorSetSpeed1(0);
+        
         /* Assemble the generic frame from static components */
         memset(&tx_frame, 0, sizeof(ZECUFrame_Generic_t));
         memcpy(&tx_frame.Header, &ZECU_Frame_Header, sizeof(ZECUFrame_Header_t));

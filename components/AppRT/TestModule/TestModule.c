@@ -1,12 +1,11 @@
 #include "__CommonHeaders.h"
 #include "TestModule.h"
-// #include "../../AppComm/SharedAPIs.h"
-// #include "../HeartBeat/Module.h"
-// #include "driver/gpio.h"
-// #include "freertos/FreeRTOS.h"
-// #include "freertos/task.h"
-// #include "rom/ets_sys.h"
-// #include "string.h"
+
+/* NOTE:
+* Due to the mistake of HW engineer ;v There's only has one GPIO to use.
+* So I'll add a macro to hot-fix this problem.
+*/
+#define TEST_SINGLE_GPIO_PIN    PIN_TEST_TRIG /* Use PIN_TEST_TRIG as the single pin */
 
 static TaskHandle_t TestTaskHandle = NULL;
 
@@ -21,13 +20,13 @@ static void IRAM_ATTR Test_ISR_Handler(void* arg) {
 }
 
 ReturnCode_t Test_Init() {
-    if (!IsValidPin(PIN_TEST_TRIG) || !IsValidPin(PIN_TEST_ECHO)) {
+#if (ZECU_ID_VAL == 0x1D0A) /* Trigger ZECU: Pin is an INPUT with Interrupt */
+    if (!IsValidPin(TEST_SINGLE_GPIO_PIN)) {
         return STAT_ERR_INVALID_ARG;
     }
-
-    // Configure PIN_TEST_TRIG as input with falling edge interrupt
+    // Configure the single pin as an input with a falling edge interrupt
     gpio_config_t io_conf = {
-        .pin_bit_mask = (1ULL << PIN_TEST_TRIG),
+        .pin_bit_mask = (1ULL << TEST_SINGLE_GPIO_PIN),
         .mode = GPIO_MODE_INPUT,
         .pull_up_en = GPIO_PULLUP_ENABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
@@ -35,32 +34,38 @@ ReturnCode_t Test_Init() {
     };
     gpio_config(&io_conf);
     
+    // Install the ISR service and handler for the trigger pin
     gpio_install_isr_service(0);
-    gpio_isr_handler_add(PIN_TEST_TRIG, Test_ISR_Handler, NULL);
+    gpio_isr_handler_add(TEST_SINGLE_GPIO_PIN, Test_ISR_Handler, NULL);
+    SysLog("TestModule: Configured as TRIGGER ZECU (0x1D0A) on GPIO %d.", TEST_SINGLE_GPIO_PIN);
 
-    // Configure PIN_TEST_ECHO as output pull-up
-    io_conf.pin_bit_mask = (1ULL << PIN_TEST_ECHO);
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.intr_type = GPIO_INTR_DISABLE;
+#elif (ZECU_ID_VAL == 0x1D0B) /* Echo ZECU: Pin is an OUTPUT */
+    if (!IsValidPin(TEST_SINGLE_GPIO_PIN)) {
+        return STAT_ERR_INVALID_ARG;
+    }
+    // Configure the single pin as an output with pull-up enabled
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << TEST_SINGLE_GPIO_PIN),
+        .mode = GPIO_MODE_OUTPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE
+    };
     gpio_config(&io_conf);
     
-    // Set to high initially
-    gpio_set_level(PIN_TEST_ECHO, 1);
-
+    // Set the pin high initially
+    gpio_set_level(TEST_SINGLE_GPIO_PIN, 1);
+    SysLog("TestModule: Configured as ECHO ZECU (0x1D0B) on GPIO %d.", TEST_SINGLE_GPIO_PIN);
+#endif
     return STAT_OKE;
 }
 
 void Test_WakeUp() {
-    // if (TestTaskHandle != NULL) {
-    //     xTaskNotifyGive(TestTaskHandle);
-    // }
-    
-    // Wake the runtime up, then make ECHO low for 1ms, then back to high
-    gpio_set_level(PIN_TEST_ECHO, 0);
+#if (ZECU_ID_VAL == 0x1D0B) /* Only the Echo ZECU generates a pulse */
+    gpio_set_level(TEST_SINGLE_GPIO_PIN, 0);
     ets_delay_us(1000); // 1ms delay
-    gpio_set_level(PIN_TEST_ECHO, 1);
+    gpio_set_level(TEST_SINGLE_GPIO_PIN, 1);
+#endif
 }
 
 ReturnCode_t Test_SetISRHandler(GenericPtr_t ISRHandler) {
@@ -91,19 +96,23 @@ void Test_Runtime(void* args) {
     while(3 >= GlobalInit_GetLevel()){ vTaskDelay(pdMS_TO_TICKS(50)); }
 
     while(1) {
-        // Sleep until notified (e.g. by trigger interrupt or KeepAlive receive)
+        // Sleep until notified by the ISR (only for Trigger ZECU)
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         
-        SysLog("Test_Runtime(...): Woken up! Sending KeepAlive packet...");
-        
-        // Write KeepAlive body
-        App_WriteFrame_KeepAlive(&tx_frame, sync_num++, 0xAA);
-        
-        // Broadcast KeepAlive via W5500
-        extern ReturnCode_t Eth_SendUDPPacket(uint32_t IPv4Address, uint16_t IPv4Port, uint8_t* UDP_Payload, uint16_t PayloadSize);
-        ReturnCode_t ret = Eth_SendUDPPacket(0xFFFFFFFF, DEFAULT_PORT_VAL, (uint8_t*)&tx_frame, sizeof(ZECUFrame_Generic_t));
-        if(ret != STAT_OKE) {
-            SysErr("Test_Runtime(...): Failed to send KeepAlive!");
+#if (ZECU_ID_VAL == 0x1D0A) /* Only the Trigger ZECU sends a packet when woken up */
+        {
+            SysLog("Test_Runtime(...): Woken up by trigger! Sending KeepAlive packet...");
+            
+            // Write KeepAlive body
+            App_WriteFrame_KeepAlive(&tx_frame, sync_num++, 0xAA);
+            
+            // Broadcast KeepAlive via W5500
+            extern ReturnCode_t Eth_SendUDPPacket(uint32_t IPv4Address, uint16_t IPv4Port, uint8_t* UDP_Payload, uint16_t PayloadSize);
+            ReturnCode_t ret = Eth_SendUDPPacket(0xFFFFFFFF, DEFAULT_PORT_VAL, (uint8_t*)&tx_frame, sizeof(ZECUFrame_Generic_t));
+            if(ret != STAT_OKE) {
+                SysErr("Test_Runtime(...): Failed to send KeepAlive!");
+            }
         }
+#endif
     }
 }

@@ -74,6 +74,10 @@ ZECU:
         Value: "NONE"
         
     # ZECU: # FRONT ZECU
+    #   ZECUID:
+    #     Macro: "ZECU_ID"
+    #     Type: UInt
+    #     Value: 0x1D0A
     #   Name:
     #     Macro: "ECU_NAME"
     #     Type: String
@@ -92,6 +96,10 @@ ZECU:
     #     Value: "b4:bf:e9:33:e0:6c"
 
     ZECU: # BACK ZECU
+      ZECUID:
+        Macro: "ZECU_ID"
+        Type: UInt
+        Value: 0x1D0B
       Name:
         Macro: "ECU_NAME"
         Type: String

@@ -12,14 +12,15 @@ extern "C" {
 #include <stdint.h>
 #include <stdlib.h>
 
-#define SYSTEM_LOG_EN               1
+#define SYSTEM_LOG_EN               0
+#define SYSTEM_INFO_EN              0
 #define SYSTEM_ERR_EN               1
-#define SYSTEM_LOG_L1_EN            1
-#define SYSTEM_LOG_L2_EN            1
-#define SYSTEM_LOG_EXIT_L1_EN       1
-#define SYSTEM_LOG_EXIT_L2_EN       1
-#define SYSTEM_LOG_ENTRY_L1_EN      1
-#define SYSTEM_LOG_ENTRY_L2_EN      1
+#define SYSTEM_LOG_L1_EN            0
+#define SYSTEM_LOG_L2_EN            0
+#define SYSTEM_LOG_EXIT_L1_EN       0
+#define SYSTEM_LOG_EXIT_L2_EN       0
+#define SYSTEM_LOG_ENTRY_L1_EN      0
+#define SYSTEM_LOG_ENTRY_L2_EN      0
 
 #define SYSTEM_SAFE_THREAD_LOG_EN   1
 

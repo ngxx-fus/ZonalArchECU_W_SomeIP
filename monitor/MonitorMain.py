@@ -898,25 +898,24 @@ class MyMonitorApp(QMainWindow):
     #  * @param ecu_name The string identifier of the ECU.
     #  */
     def register_new_ecu(self, ecu_name):
-        SysInfo("Registering newly discovered ECU: %s", ecu_name)
+        SysInfo("Registering data structures for ECU: %s", ecu_name)
         stats = {
             "received": 0, "last_seq": -1, "last_time": 0.0,
-            "dist_sync_history": deque(maxlen=MAX_NUM_POINT), "motor_sync_history": deque(maxlen=MAX_NUM_POINT),
+            "dist_sync_history": deque(maxlen=MAX_NUM_POINT),
             "d0_history": deque(maxlen=MAX_NUM_POINT), "d1_history": deque(maxlen=MAX_NUM_POINT), "d2_history": deque(maxlen=MAX_NUM_POINT),
-            "m0_history": deque(maxlen=MAX_NUM_POINT), "m1_history": deque(maxlen=MAX_NUM_POINT), "avg_cycle_history": deque(maxlen=MAX_NUM_POINT)
+            "m0_history": deque(maxlen=MAX_NUM_POINT), 
+            "m1_history": deque(maxlen=MAX_NUM_POINT), 
+            "avg_cycle_history": deque(maxlen=MAX_NUM_POINT)
         }
         
         lines = {
             "dist_seq": self.ax1.plot([], [], marker='o', markersize=3, label=f'[{ecu_name}] Dist Sync')[0],
-            "motor_seq": self.ax1.plot([], [], marker='x', markersize=3, label=f'[{ecu_name}] Motor Sync')[0],
             "avg_cycle": self.ax1_twin.plot([], [], linestyle='--', color='red', markersize=2, alpha=0.7, label=f'[{ecu_name}] Cycle (ms)')[0],
             "d0": self.ax2.plot([], [], marker='o', markersize=3, label=f'[{ecu_name}] D0')[0],
             "d1": self.ax2.plot([], [], marker='x', markersize=3, label=f'[{ecu_name}] D1')[0],
             "d2": self.ax2.plot([], [], marker='^', markersize=3, label=f'[{ecu_name}] D2')[0],
-            "m0": self.ax3.plot([], [], marker='o', markersize=3, label=f'[{ecu_name}] M0')[0],
-            "m1": self.ax3.plot([], [], marker='x', markersize=3, label=f'[{ecu_name}] M1')[0],
         }
-        
+
         self.ax1.legend(loc='upper left', fontsize='x-small')
         self.ax1_twin.legend(loc='upper right', fontsize='x-small')
         self.ax2.legend(loc='upper left', fontsize='x-small')
@@ -924,6 +923,16 @@ class MyMonitorApp(QMainWindow):
         
         self.ecu_registry[ecu_name] = { "stats": stats, "lines": lines }
         
+        # /* Dynamically add motor lines based on ECU type */
+        if "front" in ecu_name.lower():
+            lines["m0"] = self.ax3.plot([], [], marker='o', markersize=3, label=f'{ecu_name}-L')[0]
+            lines["m1"] = self.ax3.plot([], [], marker='x', markersize=3, label=f'{ecu_name}-R')[0]
+        elif "back" in ecu_name.lower():
+            lines["m0"] = self.ax3.plot([], [], marker='^', markersize=3, label=f'{ecu_name}-L')[0]
+            lines["m1"] = self.ax3.plot([], [], marker='s', markersize=3, label=f'{ecu_name}-R')[0]
+
+        self.ax3.legend(loc='upper left', fontsize='x-small')
+
         # /* Return from execution */
         return
  
@@ -961,6 +970,12 @@ class MyMonitorApp(QMainWindow):
         # /* Check if ECU is classified as Back */
         elif "back" in ecu_name_lower or "rear" in ecu_name_lower:
             ecu_type = "Back"
+
+        # Clamp ultrasonic distance values if they are out of range (e.g., 1023)
+        d0 = payload.get("d0", 0) if payload.get("d0", 0) < 1023 else 0
+        d1 = payload.get("d1", 0) if payload.get("d1", 0) < 1023 else 0
+        d2 = payload.get("d2", 0) if payload.get("d2", 0) < 1023 else 0
+        m0, m1 = payload.get("m0", 0), payload.get("m1", 0)
             
         # /* Conditional steering to validate ECU assignment */
         if ecu_type:
@@ -1026,15 +1041,16 @@ class MyMonitorApp(QMainWindow):
         stats["last_time"] = current_time
         
         stats["dist_sync_history"].append(payload["dist_sync"])
-        stats["motor_sync_history"].append(payload["motor_sync"])
         stats["avg_cycle_history"].append(cycle_ms)
-        stats["d0_history"].append(payload["d0"])
-        stats["d1_history"].append(payload["d1"])
-        stats["d2_history"].append(payload["d2"])
-        stats["m0_history"].append(payload["m0"])
-        stats["m1_history"].append(payload["m1"])
+        stats["d0_history"].append(d0)
+        stats["d1_history"].append(d1)
+        stats["d2_history"].append(d2)
+
+        stats["m0_history"].append(m0)
+        stats["m1_history"].append(m1)
+
         
-        self.update_gui_elements(ecu_name, payload["d0"], payload["d1"], payload["d2"], payload["m0"], payload["m1"])
+        self.update_gui_elements(ecu_name, d0, d1, d2, m0, m1)
 
         # /* Return from execution */
         return
@@ -1103,12 +1119,10 @@ class MyMonitorApp(QMainWindow):
         global_max_dist, global_max_motor = 0, 0
         global_max_cycle = 0
         
-        # /* Iterate through the registry to update plotting lines */
+        # Update distance and cycle time plots for each connected ECU
         for ecu_name, ecu_data in self.ecu_registry.items():
             stats = ecu_data["stats"]
             lines = ecu_data["lines"]
-            
-            # /* Guard against rendering unpopulated arrays */
             if not stats["dist_sync_history"]: 
                 # /* Continue to the next loop iteration */
                 continue
@@ -1124,22 +1138,22 @@ class MyMonitorApp(QMainWindow):
                 global_max_cycle = max(global_max_cycle, max(stats["avg_cycle_history"]))
 
             lines["dist_seq"].set_data(x_data, stats["dist_sync_history"])
-            
-            # /* Apply a slight vertical offset to Motor Sync so it doesnt completely overlap Dist Sync */
-            motor_sync_offset = [v + 0.1 for v in stats["motor_sync_history"]]
-            lines["motor_seq"].set_data(x_data, motor_sync_offset)
             lines["avg_cycle"].set_data(x_data, stats["avg_cycle_history"])
             lines["d0"].set_data(x_data, stats["d0_history"])
             lines["d1"].set_data(x_data, stats["d1_history"])
             lines["d2"].set_data(x_data, stats["d2_history"])
-            lines["m0"].set_data(x_data, stats["m0_history"])
-            lines["m1"].set_data(x_data, stats["m1_history"])
+            
+            # /* Update motor plots for the current ECU */
+            if "m0" in lines:
+                lines["m0"].set_data(x_data, stats["m0_history"])
+            if "m1" in lines:
+                lines["m1"].set_data(x_data, stats["m1_history"])
 
         self.ax1.set_xlim(global_min_x, global_max_x + 1)
         self.ax1.set_ylim(-0.5, 3.5)
         
         self.ax1_twin.set_xlim(global_min_x, global_max_x + 1)
-        self.ax1_twin.set_ylim(0, max(10, global_max_cycle * 1.2))
+        self.ax1_twin.set_ylim(0, max(10, global_max_cycle * 1.2) if global_max_cycle > 0 else 100)
         
         self.ax2.set_xlim(global_min_x, global_max_x + 1)
         self.ax3.set_xlim(global_min_x, global_max_x + 1)
