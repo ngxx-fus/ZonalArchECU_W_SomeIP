@@ -1,0 +1,18 @@
+CompileFlags:
+  CompilationDatabase: build
+  Remove:
+    - -mlongcalls
+    - -fstrict-volatile-bitfields
+    - -fno-tree-switch-conversion
+    - -fzero-init-padding-bits=all
+    - -fno-malloc-dce
+    - -fno-jump-tables
+  Add:
+    - -Wno-unknown-warning-option
+    - -Wno-unused-command-line-argument
+
+Diagnostics:
+  Suppress:
+    - drv_unknown_argument
+    - drv_unknown_argument_with_suggestion
+
